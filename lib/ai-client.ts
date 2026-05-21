@@ -23,12 +23,12 @@ type ChatCompletionResponse = {
 };
 
 export function hasAiConfig() {
-  return Boolean(process.env.AI_BASE_URL && process.env.AI_API_KEY);
+  return Boolean(readEnv("AI_BASE_URL") && readEnv("AI_API_KEY"));
 }
 
 export async function createChatCompletion({
   messages,
-  model = process.env.AI_MODEL || "deepseek-chat",
+  model,
   temperature = 0.4,
   maxTokens,
   responseFormat,
@@ -42,16 +42,18 @@ export async function createChatCompletion({
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const baseUrl = process.env.AI_BASE_URL?.replace(/\/+$/, "");
+    const baseUrl = readEnv("AI_BASE_URL")?.replace(/\/+$/, "");
+    const apiKey = readEnv("AI_API_KEY");
+    const selectedModel = model || readEnv("AI_MODEL") || "deepseek-chat";
     const response = await fetch(`${baseUrl}/chat/completions`, {
       method: "POST",
       signal: controller.signal,
       headers: {
-        Authorization: `Bearer ${process.env.AI_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model,
+        model: selectedModel,
         messages,
         temperature,
         ...(maxTokens ? { max_tokens: maxTokens } : {}),
@@ -73,4 +75,8 @@ export async function createChatCompletion({
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function readEnv(name: string) {
+  return process.env[name]?.replace(/^\uFEFF/, "").trim();
 }

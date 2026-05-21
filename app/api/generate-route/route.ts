@@ -43,19 +43,31 @@ export async function POST(request: Request) {
       courses: parseCourseList(text)
     };
     return NextResponse.json(routeFromOutline(outline, goal));
-  } catch {
+  } catch (error) {
+    console.warn("AI route fallback:", error instanceof Error ? error.message : "unknown error");
     return NextResponse.json(routeForGoal(goal));
   }
 }
 
 function parseCourseList(text: string) {
-  return text
+  const cleaned = text
     .trim()
     .replace(/^```(?:text)?/i, "")
-    .replace(/```$/i, "")
-    .split(/[,，\n、]/)
-    .map((item) => item.replace(/^\d+[.)、]\s*/, "").trim())
-    .filter(Boolean);
+    .replace(/```$/i, "");
+
+  return cleaned
+    .split(/[,，\n、；;]/)
+    .flatMap((item) => item.split(/\s{2,}/))
+    .map((item) =>
+      item
+        .replace(/^\s*[-*+]\s*/, "")
+        .replace(/^\s*\d{1,2}\s*[.)、:：-]\s*/, "")
+        .replace(/[*_`#]/g, "")
+        .replace(/[。.!！?？].*$/, "")
+        .replace(/[:：].*$/, "")
+        .trim()
+    )
+    .filter((item) => item.length >= 2 && item.length <= 24);
 }
 
 function routeFromOutline(outline: AiRouteOutline, goal: string): MaopuRoute {
