@@ -52,6 +52,8 @@ import {
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
+  aiEngineerRoute,
+  csdiyRoute,
   defaultRoute,
   Domain,
   domainStyles,
@@ -86,6 +88,7 @@ type CommunityRouteCard = {
   learners: string;
   categories: string[];
   prompt: string;
+  builtinRoute?: MaopuRoute;
 };
 
 const STORAGE_KEY = "maopu.savedRoutes.v1";
@@ -94,28 +97,31 @@ const MASCOT_STYLE_KEY = "maopu.mascotStyle.v1";
 
 const routeCards: CommunityRouteCard[] = [
   {
-    title: "MIT 计算机科学路线",
-    author: "MIT OpenCourseWare",
-    rating: "4.8",
-    learners: "12.4k",
-    categories: ["热门", "就业"],
-    prompt: "参考 MIT OpenCourseWare，为计算机科学基础学习者规划一条包含编程、数学、系统、算法和项目实践的路线"
-  },
-  {
-    title: "OpenAI 工程师路线",
-    author: "OpenAI Cookbook",
+    title: "CS 基础自学路线（CSDIY 精选）",
+    author: "csdiy.wiki · PKUFlyingPig",
     rating: "4.9",
-    learners: "8.7k",
-    categories: ["热门", "AI", "就业"],
-    prompt: "为想成为 AI 应用工程师的人规划路线，覆盖大模型 API、提示工程、RAG、评估、部署和产品项目"
+    learners: "32.1k",
+    categories: ["热门", "精选", "CS 基础"],
+    prompt: "",
+    builtinRoute: csdiyRoute
   },
   {
-    title: "独立游戏开发路线",
-    author: "Indie Game Dev",
-    rating: "4.6",
-    learners: "5.2k",
-    categories: ["热门", "游戏开发"],
-    prompt: "为独立游戏开发者规划路线，覆盖游戏设计、引擎、图形、物理、关卡、发布和作品集"
+    title: "AI 工程师路线",
+    author: "猫扑精选",
+    rating: "4.9",
+    learners: "18.6k",
+    categories: ["热门", "精选", "AI", "就业"],
+    prompt: "",
+    builtinRoute: aiEngineerRoute
+  },
+  {
+    title: "全栈工程师路线",
+    author: "猫扑精选",
+    rating: "4.8",
+    learners: "21.3k",
+    categories: ["热门", "精选", "就业"],
+    prompt: "",
+    builtinRoute: defaultRoute
   },
   {
     title: "计算机考研 408 路线",
@@ -123,7 +129,7 @@ const routeCards: CommunityRouteCard[] = [
     rating: "4.7",
     learners: "15.1k",
     categories: ["热门", "考研"],
-    prompt: "为计算机考研 408 规划系统复习路线，覆盖数据结构、组成原理、操作系统、计算机网络和阶段练习"
+    prompt: "为计算机考研 408 规划系统复习路线，覆盖数据结构、组成原理、操作系统、计算机网络，每个模块注明第一性原理和核心考点，附推荐教材和练习资源"
   },
   {
     title: "前端就业项目路线",
@@ -131,15 +137,15 @@ const routeCards: CommunityRouteCard[] = [
     rating: "4.6",
     learners: "6.9k",
     categories: ["最新", "就业"],
-    prompt: "为前端就业准备规划路线，覆盖 HTML CSS JavaScript React Next.js 工程化、项目作品和面试复盘"
+    prompt: "为前端就业准备规划路线，覆盖 HTML CSS JavaScript TypeScript React Next.js 工程化、项目作品和面试复盘，每个节点说明它解决什么问题"
   },
   {
-    title: "AI 科研入门路线",
-    author: "Papers + Lab",
-    rating: "4.8",
-    learners: "9.1k",
-    categories: ["最新", "AI"],
-    prompt: "为 AI 科研入门规划路线，覆盖数学基础、机器学习、深度学习、论文阅读、实验复现和研究问题定义"
+    title: "独立游戏开发路线",
+    author: "Indie Game Dev",
+    rating: "4.6",
+    learners: "5.2k",
+    categories: ["最新", "游戏开发"],
+    prompt: "为独立游戏开发者规划路线，覆盖游戏设计原理、Unity/Godot 引擎、图形学基础、物理模拟、关卡设计、发布平台和作品集建设"
   }
 ];
 
@@ -1530,10 +1536,12 @@ function UploadPage({
 
 function CommunityPage({
   onGenerate,
+  onLoadBuiltin,
   notify,
   setView
 }: {
   onGenerate: (goal: string) => void;
+  onLoadBuiltin: (route: MaopuRoute) => void;
   notify: (message: string) => void;
   setView: (view: View) => void;
 }) {
@@ -1546,7 +1554,7 @@ function CommunityPage({
       return [];
     }
   });
-  const tabs = ["热门", "最新", "考研", "就业", "AI", "游戏开发", "收藏"];
+  const tabs = ["热门", "精选", "最新", "考研", "就业", "AI", "游戏开发", "CS 基础", "收藏"];
   const filteredCards =
     activeTab === "收藏" ? routeCards.filter((card) => favorites.includes(card.title)) : routeCards.filter((card) => card.categories.includes(activeTab));
 
@@ -1597,8 +1605,15 @@ function CommunityPage({
             {filteredCards.map((card) => (
             <article key={card.title} className="flex min-h-[520px] flex-col justify-between rounded-3xl border border-line bg-white p-8 shadow-soft">
               <div>
-                <h2 className="text-3xl font-black leading-tight">{card.title}</h2>
-                <p className="mt-8 min-h-24 text-lg leading-7 text-muted">{card.prompt}</p>
+                <div className="flex items-start gap-3">
+                  <h2 className="text-3xl font-black leading-tight">{card.title}</h2>
+                  {card.builtinRoute && (
+                    <span className="mt-1 shrink-0 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-black text-brand-500 border border-brand-100">精选</span>
+                  )}
+                </div>
+                <p className="mt-8 min-h-24 text-lg leading-7 text-muted">
+                  {card.builtinRoute ? card.builtinRoute.description : card.prompt}
+                </p>
                 <p className="mt-8 text-xl text-muted">{card.author}</p>
                 <p className="mt-6 flex items-center gap-5 text-xl">
                   <span className="text-amber-500">★ {card.rating}</span>
@@ -1606,12 +1621,18 @@ function CommunityPage({
                 </p>
               </div>
               <div className="grid gap-3">
-                <OutlineButton onClick={() => onGenerate(card.prompt)}>生成这条路线</OutlineButton>
+                {card.builtinRoute ? (
+                  <OutlineButton onClick={() => onLoadBuiltin(card.builtinRoute!)}>
+                    直接打开路线 →
+                  </OutlineButton>
+                ) : (
+                  <OutlineButton onClick={() => onGenerate(card.prompt)}>生成这条路线</OutlineButton>
+                )}
                 <div className="flex justify-between text-muted">
                   <button onClick={() => toggleFavorite(card.title)} title="收藏路线" className={favorites.includes(card.title) ? "text-rose-500" : "hover:text-rose-500"}>
                     <Heart className="h-6 w-6" />
                   </button>
-                  <button onClick={() => onGenerate(`Fork 并定制这条路线：${card.prompt}`)} title="Fork 路线" className="hover:text-brand-500">
+                  <button onClick={() => card.builtinRoute ? onLoadBuiltin(card.builtinRoute) : onGenerate(`Fork 并定制这条路线：${card.prompt}`)} title="Fork 路线" className="hover:text-brand-500">
                     <GitFork className="h-6 w-6" />
                   </button>
                   <button onClick={() => void shareRoute(card)} title="复制分享" className="hover:text-brand-500">
@@ -2059,7 +2080,14 @@ export default function HomePage() {
   }
 
   if (view === "community") {
-    return withToasts(<CommunityPage onGenerate={generateRoute} notify={notify} setView={setView} />);
+    return withToasts(
+      <CommunityPage
+        onGenerate={generateRoute}
+        onLoadBuiltin={(builtinRoute) => { importRoute(builtinRoute); setView("map"); }}
+        notify={notify}
+        setView={setView}
+      />
+    );
   }
 
   if (view === "universe") {
