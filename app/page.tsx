@@ -1879,7 +1879,7 @@ export default function HomePage() {
       nodes: route.nodes.map((node) => (node.id === id ? { ...node, position } : node))
     };
     setRoute(nextRoute);
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify([nextRoute]));
+    saveRoute(nextRoute, { silent: true });
   }
 
   function exportRoute(kind: "markdown" | "json" | "svg") {
