@@ -33,8 +33,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: fallbackMessage(action, route, currentNode, question) });
   }
 
+  const content = await tryAssistantCompletion(action, route, currentNode, question);
+  return NextResponse.json({ message: content ?? fallbackMessage(action, route, currentNode, question) });
+}
+
+async function tryAssistantCompletion(action: AssistantAction, route: MaopuRoute | undefined, node: KnowledgeNode | null, question?: string) {
   try {
-    const context = buildAssistantContext(route, currentNode, question);
+    const context = buildAssistantContext(route, node, question);
     const content = await createChatCompletion({
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
@@ -48,12 +53,41 @@ ${context}`
       ],
       temperature: 0.55,
       maxTokens: 180,
-      timeoutMs: 8000
+      timeoutMs: 15000
     });
 
-    return NextResponse.json({ message: cleanAssistantMessage(content) });
+    return cleanAssistantMessage(content);
   } catch {
-    return NextResponse.json({ message: fallbackMessage(action, route, currentNode, question) });
+    return tryTinyAssistantCompletion(action, route, node, question);
+  }
+}
+
+async function tryTinyAssistantCompletion(action: AssistantAction, route: MaopuRoute | undefined, node: KnowledgeNode | null, question?: string) {
+  try {
+    const nextNode = nextLearningNode(route, node);
+    const content = await createChatCompletion({
+      messages: [
+        {
+          role: "system",
+          content: "Answer in Simplified Chinese. Plain text only. Under 80 Chinese characters. Be concrete."
+        },
+        {
+          role: "user",
+          content: `Action: ${actionLabel(action)}
+Topic: ${node?.title ?? route?.title ?? "当前路线"}
+Next topic: ${nextNode?.title ?? ""}
+Question: ${question ?? ""}
+Resources: ${(node?.resources ?? []).slice(0, 3).join(", ")}`
+        }
+      ],
+      temperature: 0.45,
+      maxTokens: 120,
+      timeoutMs: 12000
+    });
+
+    return cleanAssistantMessage(content);
+  } catch {
+    return null;
   }
 }
 
