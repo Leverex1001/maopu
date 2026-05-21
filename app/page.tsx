@@ -71,7 +71,7 @@ type Toast = {
 };
 
 type AssistantAction = "next" | "explain" | "resource" | "ask";
-type MascotVariant = "planner" | "coder" | "sleepy";
+type MascotVariant = "planner" | "coder" | "idea" | "thinking" | "sleepy" | "happy";
 
 type RecognitionResult = {
   goal: string;
@@ -160,10 +160,13 @@ const statusOptions: Array<{ value: LearningStatus; label: string }> = [
   { value: "unlearned", label: "未学习" }
 ];
 
-const mascotStyles: Array<{ value: MascotVariant; label: string; description: string }> = [
-  { value: "planner", label: "规划师", description: "精神满满，适合生成路线" },
-  { value: "coder", label: "工程师", description: "戴着护目镜，适合项目学习" },
-  { value: "sleepy", label: "困困版", description: "犯困摇头，适合陪学" }
+const mascotStyles: Array<{ value: MascotVariant; label: string; description: string; avatar: string }> = [
+  { value: "planner", label: "精神", description: "挥手上线，适合开始规划", avatar: "/maopu-images/mascot-avatar-planner.png" },
+  { value: "coder", label: "学习", description: "伏案学习，适合拆解路线", avatar: "/maopu-images/mascot-avatar-coder.png" },
+  { value: "idea", label: "灵感", description: "想到办法，适合生成方案", avatar: "/maopu-images/mascot-avatar-idea.png" },
+  { value: "thinking", label: "思考", description: "认真判断，适合分析取舍", avatar: "/maopu-images/mascot-avatar-thinking.png" },
+  { value: "sleepy", label: "困困", description: "打哈欠，适合慢慢陪学", avatar: "/maopu-images/mascot-avatar-sleepy.png" },
+  { value: "happy", label: "开心", description: "挥手鼓励，适合完成节点", avatar: "/maopu-images/mascot-avatar-happy.png" }
 ];
 
 function createBlankRoute(title = "我的自定义路线"): MaopuRoute {
@@ -374,121 +377,113 @@ function MascotStyleSwitch({
   compact?: boolean;
 }) {
   return (
-    <div className={`flex flex-wrap gap-2 ${compact ? "text-xs" : "text-sm"}`} aria-label="切换小扑形象">
+    <div className={`flex flex-wrap gap-2 ${compact ? "text-xs" : "text-sm"}`} aria-label="切换小扑状态">
       {mascotStyles.map((style) => (
         <button
           key={style.value}
           type="button"
           onClick={() => onChange(style.value)}
           title={style.description}
-          className={`rounded-full border px-3 py-2 font-black transition ${
+          className={`flex items-center gap-2 rounded-full border font-black transition ${compact ? "px-2 py-1.5" : "px-3 py-2"} ${
             variant === style.value ? "border-brand-500 bg-brand-50 text-brand-500" : "border-line bg-white text-muted hover:border-brand-500 hover:text-brand-500"
           }`}
         >
-          {style.label}
+          <img
+            src={style.avatar}
+            alt=""
+            className={`${compact ? "mascot-switch-thumb-compact" : "mascot-switch-thumb"} rounded-full bg-white object-cover object-top`}
+          />
+          <span>{style.label}</span>
         </button>
       ))}
     </div>
   );
 }
 
-function MascotBuddy({ variant, size = "md", className = "" }: { variant: MascotVariant; size?: "sm" | "md" | "lg"; className?: string }) {
-  return (
-    <div className={`maopu-buddy maopu-buddy-${variant} maopu-buddy-${size} ${className}`} aria-hidden="true">
-      <span className="buddy-ear buddy-ear-left" />
-      <span className="buddy-ear buddy-ear-right" />
-      <span className="buddy-face">
-        <span className="buddy-eye buddy-eye-left" />
-        <span className="buddy-eye buddy-eye-right" />
-        <span className="buddy-mouth" />
-        <span className="buddy-blush buddy-blush-left" />
-        <span className="buddy-blush buddy-blush-right" />
-        <span className="buddy-glasses" />
-        <span className="buddy-sleep">Z</span>
-      </span>
-      <span className="buddy-tail" />
-    </div>
-  );
-}
+const mascotStageImages: Record<MascotVariant, {
+  main: string;
+  avatar: string;
+  mainAlt: string;
+  mainClass: string;
+  note: string;
+  cues: string[];
+}> = {
+  planner: {
+    main: "/maopu-images/mascot-planner.png",
+    avatar: "/maopu-images/mascot-avatar-planner.png",
+    mainAlt: "猫小扑挥手精神状态",
+    mainClass: "right-[-5%] h-[92%]",
+    note: "精神上线，先把目标拆成能走的路线。",
+    cues: ["轻呼吸", "挥手摆动", "状态同步"]
+  },
+  coder: {
+    main: "/maopu-images/mascot-study-desk.png",
+    avatar: "/maopu-images/mascot-avatar-coder.png",
+    mainAlt: "猫小扑桌前学习状态",
+    mainClass: "right-[-8%] h-[88%]",
+    note: "进入学习模式，陪你把节点和依赖关系写清楚。",
+    cues: ["伏案微动", "笔记节奏", "专注视线"]
+  },
+  idea: {
+    main: "/maopu-images/mascot-idea.png",
+    avatar: "/maopu-images/mascot-avatar-idea.png",
+    mainAlt: "猫小扑灵感状态",
+    mainClass: "right-[-6%] h-[92%]",
+    note: "灵感弹出，适合把模糊想法变成路线草案。",
+    cues: ["上浮提示", "亮点闪烁", "轻快弹入"]
+  },
+  thinking: {
+    main: "/maopu-images/mascot-thinking.png",
+    avatar: "/maopu-images/mascot-avatar-thinking.png",
+    mainAlt: "猫小扑思考状态",
+    mainClass: "right-[-5%] h-[92%]",
+    note: "认真思考，帮你判断前置知识和学习顺序。",
+    cues: ["慢速摇摆", "疑问停顿", "稳定呼吸"]
+  },
+  sleepy: {
+    main: "/maopu-images/mascot-sleepy.png",
+    avatar: "/maopu-images/mascot-avatar-sleepy.png",
+    mainAlt: "猫小扑困困打哈欠状态",
+    mainClass: "right-[-7%] h-[92%]",
+    note: "困困陪学，节奏放慢但不会把你丢下。",
+    cues: ["慢点头", "轻摇头", "睡意漂浮"]
+  },
+  happy: {
+    main: "/maopu-images/mascot-happy.png",
+    avatar: "/maopu-images/mascot-avatar-happy.png",
+    mainAlt: "猫小扑开心鼓励状态",
+    mainClass: "right-[-6%] h-[92%]",
+    note: "完成一个节点后，小扑切到开心鼓励状态。",
+    cues: ["挥手回弹", "轻快漂浮", "完成反馈"]
+  }
+};
 
 function MascotAvatar({ variant, className = "" }: { variant: MascotVariant; className?: string }) {
+  const mascot = mascotStageImages[variant];
+
   return (
-    <span className={`relative block ${className}`}>
-      <span className="mascot-assistant block h-full w-full rounded-full border border-brand-100 bg-brand-50" />
-      <MascotBuddy variant={variant} size="sm" className="absolute -bottom-2 -right-2" />
+    <span className={`mascot-avatar-live mascot-avatar-live-${variant} relative block overflow-hidden rounded-full border border-brand-100 bg-white shadow-soft ${className}`}>
+      <img src={mascot.avatar} alt={`${mascotStyles.find((style) => style.value === variant)?.label ?? "小扑"}状态头像`} className="h-full w-full object-cover object-top" />
     </span>
   );
 }
-
-// 各形象对应的图片配置
-const mascotStageImages: Record<MascotVariant, {
-  main: string; mainAlt: string; mainClass: string;
-  float?: string; floatAlt?: string; floatClass?: string;
-  deco?: string; decoAlt?: string; decoClass?: string;
-  badge?: string; badgeAlt?: string; badgeClass?: string;
-}> = {
-  planner: {
-    // 主图：桌前展示地图（左下大图）
-    main: "/maopu-images/mascot-hero-ai.png",
-    mainAlt: "猫小扑展示知识地图",
-    mainClass: "absolute bottom-0 left-[6%] h-[88%] max-w-none object-contain object-bottom z-10",
-    // 右上漂浮头像
-    float: "/maopu-images/mascot-avatar.png",
-    floatAlt: "猫小扑头像",
-    floatClass: "pointer-events-none absolute right-7 top-[88px] h-[72px] w-[72px] rounded-full border-2 border-brand-100 bg-white/80 object-cover shadow-soft animate-gentle-float z-20",
-    // 右侧中部装饰小图（hero-fixed）
-    deco: "/maopu-images/mascot-hero-fixed.png",
-    decoAlt: "猫小扑坐姿",
-    decoClass: "pointer-events-none absolute right-4 bottom-[180px] h-[130px] w-auto object-contain animate-deco-sway z-10 opacity-90",
-  },
-  coder: {
-    // 主图：正面全身立绘（右侧大图）
-    main: "/maopu-images/mascot-full.png",
-    mainAlt: "猫小扑全身立绘",
-    mainClass: "absolute bottom-0 right-[4%] h-[90%] max-w-none object-contain object-bottom z-10",
-    // 左上漂浮头像
-    float: "/maopu-images/mascot-avatar.png",
-    floatAlt: "猫小扑头像",
-    floatClass: "pointer-events-none absolute left-[140px] top-[82px] h-[64px] w-[64px] rounded-full border-2 border-emerald-200 bg-white/80 object-cover shadow-soft animate-gentle-float z-20",
-    // 中间桌前小图
-    deco: "/maopu-images/mascot-hero.png",
-    decoAlt: "猫小扑桌前",
-    decoClass: "pointer-events-none absolute left-[8%] bottom-[164px] h-[160px] w-auto object-contain animate-deco-sway z-10 opacity-85",
-  },
-  sleepy: {
-    // 主图：hero-fixed（更温柔的坐姿，右侧大些）
-    main: "/maopu-images/mascot-hero-fixed.png",
-    mainAlt: "猫小扑困困坐姿",
-    mainClass: "absolute bottom-0 left-[5%] h-[82%] max-w-none object-contain object-bottom z-10",
-    // 右侧漂浮全身立绘（小一点）
-    float: "/maopu-images/mascot-full.png",
-    floatAlt: "猫小扑全身",
-    floatClass: "pointer-events-none absolute right-[2%] bottom-[40px] h-[240px] w-auto object-contain animate-gentle-float z-10 opacity-80",
-    // 右上头像
-    deco: "/maopu-images/mascot-avatar.png",
-    decoAlt: "猫小扑头像",
-    decoClass: "pointer-events-none absolute right-8 top-[80px] h-[60px] w-[60px] rounded-full border-2 border-violet-200 bg-white/80 object-cover shadow-soft animate-deco-sway z-20 opacity-90",
-  },
-};
 
 function MascotStage({ variant, onChange }: { variant: MascotVariant; onChange: (variant: MascotVariant) => void }) {
   const imgs = mascotStageImages[variant];
 
   return (
-    <div className={`mascot-stage mascot-stage-${variant} relative min-h-[560px] overflow-hidden rounded-[2rem] border border-brand-100 bg-white shadow-soft`}>
-      {/* 形象切换面板 */}
-      <div className="absolute left-6 top-6 z-30 rounded-2xl border border-brand-100 bg-white/90 p-4 shadow-soft backdrop-blur">
-        <p className="text-sm font-bold text-muted">小扑形象</p>
+    <div className={`mascot-stage mascot-stage-${variant} relative min-h-[580px] overflow-hidden rounded-[2rem] border border-brand-100 bg-white shadow-soft`}>
+      <div className="absolute left-6 top-6 z-30 max-w-[340px] rounded-2xl border border-brand-100 bg-white/90 p-4 shadow-soft backdrop-blur">
+        <p className="text-sm font-bold text-muted">小扑状态</p>
         <MascotStyleSwitch variant={variant} onChange={onChange} compact />
       </div>
 
-      {/* 主图 — 随 variant 切换，带淡入效果 */}
       <AnimatePresence mode="wait">
         <motion.img
           key={`main-${variant}`}
           src={imgs.main}
           alt={imgs.mainAlt}
-          className={imgs.mainClass}
+          className={`mascot-live mascot-live-${variant} absolute bottom-0 max-w-none object-contain object-bottom z-10 ${imgs.mainClass}`}
           initial={{ opacity: 0, scale: 0.96, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.97, y: 6 }}
@@ -496,54 +491,11 @@ function MascotStage({ variant, onChange }: { variant: MascotVariant; onChange: 
         />
       </AnimatePresence>
 
-      {/* 漂浮图（右上或左上角头像/小图） */}
-      {imgs.float && (
-        <AnimatePresence mode="wait">
-          <motion.img
-            key={`float-${variant}`}
-            src={imgs.float}
-            alt={imgs.floatAlt ?? ""}
-            className={imgs.floatClass ?? ""}
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.32, delay: 0.08 }}
-          />
-        </AnimatePresence>
-      )}
-
-      {/* 装饰小图 */}
-      {imgs.deco && (
-        <AnimatePresence mode="wait">
-          <motion.img
-            key={`deco-${variant}`}
-            src={imgs.deco}
-            alt={imgs.decoAlt ?? ""}
-            className={imgs.decoClass ?? ""}
-            initial={{ opacity: 0, x: 12 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 12 }}
-            transition={{ duration: 0.3, delay: 0.14 }}
-          />
-        </AnimatePresence>
-      )}
-
-      {/* CSS Buddy 小猫（大号，左侧中下） */}
-      <MascotBuddy variant={variant} size="lg" className="absolute left-8 bottom-[196px] z-20" />
-
-      {/* CSS Buddy 小猫（小号，右上角） */}
-      <MascotBuddy
-        variant={variant === "sleepy" ? "planner" : "sleepy"}
-        size="sm"
-        className="absolute right-10 top-[156px] z-20 opacity-80"
-      />
-
-      {/* 底部信息卡片 */}
-      <div className="absolute bottom-6 left-6 right-6 z-20 rounded-2xl border border-brand-100 bg-white/90 p-5 shadow-soft backdrop-blur">
+      <div className="absolute bottom-6 left-6 z-20 max-w-[430px] rounded-2xl border border-brand-100 bg-white/90 p-5 shadow-soft backdrop-blur">
         <p className="text-sm font-bold text-muted">路线从你的输入开始</p>
-        <p className="mt-1 text-xl font-black">目标识别 → 节点规划 → 依赖地图</p>
+        <p className="mt-1 text-xl font-black">{imgs.note}</p>
         <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm font-bold text-muted">
-          {["识别目标和当前基础", "抽取关键能力和约束", "生成可编辑知识地图"].map((item) => (
+          {imgs.cues.map((item) => (
             <div key={item} className="flex items-center gap-1.5">
               <CheckCircle2 className="h-4 w-4 shrink-0 text-brand-500" />
               {item}
@@ -1114,7 +1066,7 @@ function Assistant({
               你现在正在看：{target}。我会先帮你理解它为什么存在，再推荐下一步。
             </div>
             <div className="mt-4 rounded-2xl border border-line bg-white p-3">
-              <p className="mb-2 text-xs font-black text-muted">切换小扑形象</p>
+              <p className="mb-2 text-xs font-black text-muted">切换小扑状态</p>
               <MascotStyleSwitch variant={mascotVariant} onChange={onMascotVariantChange} compact />
             </div>
             <div className="mt-4 min-h-32 rounded-2xl border border-line p-5 font-semibold leading-7 text-ink">
@@ -1817,8 +1769,8 @@ export default function HomePage() {
 
   useEffect(() => {
     const savedMascotStyle = window.localStorage.getItem(MASCOT_STYLE_KEY);
-    if (savedMascotStyle === "planner" || savedMascotStyle === "coder" || savedMascotStyle === "sleepy") {
-      setMascotVariant(savedMascotStyle);
+    if (mascotStyles.some((style) => style.value === savedMascotStyle)) {
+      setMascotVariant(savedMascotStyle as MascotVariant);
     }
 
     const sharedRoute = decodeSharedRoute(window.location.hash);
@@ -1837,7 +1789,7 @@ export default function HomePage() {
   function updateMascotVariant(nextVariant: MascotVariant) {
     setMascotVariant(nextVariant);
     window.localStorage.setItem(MASCOT_STYLE_KEY, nextVariant);
-    notify(`已切换小扑形象：${mascotStyles.find((style) => style.value === nextVariant)?.label ?? "小扑"}`);
+    notify(`已切换小扑状态：${mascotStyles.find((style) => style.value === nextVariant)?.label ?? "小扑"}`);
   }
 
   function notify(message: string) {
