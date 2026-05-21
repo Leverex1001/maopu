@@ -47,6 +47,19 @@
 - 支持自由提问。
 - 助手失败时返回本地 fallback 文案，避免界面不可用。
 
+### 猫小扑虚拟形象
+
+- 支持三种可切换形象：规划师、工程师、困困版。
+- 每种形象对应一套不同的图片组合（2–3 张），布局互相错开、不遮挡核心内容。
+- 切换形象时图片带淡入淡出过渡动画（framer-motion AnimatePresence），主图缩放淡入，装饰图侧向滑入，错开 delay 有层次感。
+- 形象偏好保存在浏览器本地，刷新后恢复。
+- CSS 绘制的 Buddy 小猫支持动态动画：
+  - 耳朵：弹性四帧连续抖动，困困版单独用慢速垂耳动画。
+  - 困困摇头：六帧关键帧模拟"慢慢低头 → 快要睡着 → 猛然回神 → 惯性偏右"。
+  - 尾巴：四帧不规则摇摆，更接近真实猫咪动作。
+  - 睡意 Z 字：双层 Z 错开出现，持续漂浮消散。
+  - 装饰小图：独立左右轻摇动画（deco-sway）。
+
 ### 导入和导出
 
 - 支持导出路线为：
@@ -200,7 +213,7 @@ AI_MODEL=deepseek-chat
 - TypeScript
 - Tailwind CSS
 - React Flow
-- Framer Motion
+- Framer Motion（页面动画、形象切换过渡）
 - Lucide React
 - DeepSeek / OpenAI-compatible API
 

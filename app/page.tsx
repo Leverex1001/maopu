@@ -69,6 +69,7 @@ type Toast = {
 };
 
 type AssistantAction = "next" | "explain" | "resource" | "ask";
+type MascotVariant = "planner" | "coder" | "sleepy";
 
 type RecognitionResult = {
   goal: string;
@@ -89,6 +90,7 @@ type CommunityRouteCard = {
 
 const STORAGE_KEY = "maopu.savedRoutes.v1";
 const FAVORITES_KEY = "maopu.favoriteCommunityRoutes.v1";
+const MASCOT_STYLE_KEY = "maopu.mascotStyle.v1";
 
 const routeCards: CommunityRouteCard[] = [
   {
@@ -150,6 +152,12 @@ const statusOptions: Array<{ value: LearningStatus; label: string }> = [
   { value: "learned", label: "已学习" },
   { value: "learning", label: "学习中" },
   { value: "unlearned", label: "未学习" }
+];
+
+const mascotStyles: Array<{ value: MascotVariant; label: string; description: string }> = [
+  { value: "planner", label: "规划师", description: "精神满满，适合生成路线" },
+  { value: "coder", label: "工程师", description: "戴着护目镜，适合项目学习" },
+  { value: "sleepy", label: "困困版", description: "犯困摇头，适合陪学" }
 ];
 
 function createBlankRoute(title = "我的自定义路线"): MaopuRoute {
@@ -350,12 +358,205 @@ function OutlineButton({ children, className = "", ...props }: React.ButtonHTMLA
   );
 }
 
+function MascotStyleSwitch({
+  variant,
+  onChange,
+  compact = false
+}: {
+  variant: MascotVariant;
+  onChange: (variant: MascotVariant) => void;
+  compact?: boolean;
+}) {
+  return (
+    <div className={`flex flex-wrap gap-2 ${compact ? "text-xs" : "text-sm"}`} aria-label="切换小扑形象">
+      {mascotStyles.map((style) => (
+        <button
+          key={style.value}
+          type="button"
+          onClick={() => onChange(style.value)}
+          title={style.description}
+          className={`rounded-full border px-3 py-2 font-black transition ${
+            variant === style.value ? "border-brand-500 bg-brand-50 text-brand-500" : "border-line bg-white text-muted hover:border-brand-500 hover:text-brand-500"
+          }`}
+        >
+          {style.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function MascotBuddy({ variant, size = "md", className = "" }: { variant: MascotVariant; size?: "sm" | "md" | "lg"; className?: string }) {
+  return (
+    <div className={`maopu-buddy maopu-buddy-${variant} maopu-buddy-${size} ${className}`} aria-hidden="true">
+      <span className="buddy-ear buddy-ear-left" />
+      <span className="buddy-ear buddy-ear-right" />
+      <span className="buddy-face">
+        <span className="buddy-eye buddy-eye-left" />
+        <span className="buddy-eye buddy-eye-right" />
+        <span className="buddy-mouth" />
+        <span className="buddy-blush buddy-blush-left" />
+        <span className="buddy-blush buddy-blush-right" />
+        <span className="buddy-glasses" />
+        <span className="buddy-sleep">Z</span>
+      </span>
+      <span className="buddy-tail" />
+    </div>
+  );
+}
+
+function MascotAvatar({ variant, className = "" }: { variant: MascotVariant; className?: string }) {
+  return (
+    <span className={`relative block ${className}`}>
+      <span className="mascot-assistant block h-full w-full rounded-full border border-brand-100 bg-brand-50" />
+      <MascotBuddy variant={variant} size="sm" className="absolute -bottom-2 -right-2" />
+    </span>
+  );
+}
+
+// 各形象对应的图片配置
+const mascotStageImages: Record<MascotVariant, {
+  main: string; mainAlt: string; mainClass: string;
+  float?: string; floatAlt?: string; floatClass?: string;
+  deco?: string; decoAlt?: string; decoClass?: string;
+  badge?: string; badgeAlt?: string; badgeClass?: string;
+}> = {
+  planner: {
+    // 主图：桌前展示地图（左下大图）
+    main: "/maopu-images/mascot-hero-ai.png",
+    mainAlt: "猫小扑展示知识地图",
+    mainClass: "absolute bottom-0 left-[6%] h-[88%] max-w-none object-contain object-bottom z-10",
+    // 右上漂浮头像
+    float: "/maopu-images/mascot-avatar.png",
+    floatAlt: "猫小扑头像",
+    floatClass: "pointer-events-none absolute right-7 top-[88px] h-[72px] w-[72px] rounded-full border-2 border-brand-100 bg-white/80 object-cover shadow-soft animate-gentle-float z-20",
+    // 右侧中部装饰小图（hero-fixed）
+    deco: "/maopu-images/mascot-hero-fixed.png",
+    decoAlt: "猫小扑坐姿",
+    decoClass: "pointer-events-none absolute right-4 bottom-[180px] h-[130px] w-auto object-contain animate-deco-sway z-10 opacity-90",
+  },
+  coder: {
+    // 主图：正面全身立绘（右侧大图）
+    main: "/maopu-images/mascot-full.png",
+    mainAlt: "猫小扑全身立绘",
+    mainClass: "absolute bottom-0 right-[4%] h-[90%] max-w-none object-contain object-bottom z-10",
+    // 左上漂浮头像
+    float: "/maopu-images/mascot-avatar.png",
+    floatAlt: "猫小扑头像",
+    floatClass: "pointer-events-none absolute left-[140px] top-[82px] h-[64px] w-[64px] rounded-full border-2 border-emerald-200 bg-white/80 object-cover shadow-soft animate-gentle-float z-20",
+    // 中间桌前小图
+    deco: "/maopu-images/mascot-hero.png",
+    decoAlt: "猫小扑桌前",
+    decoClass: "pointer-events-none absolute left-[8%] bottom-[164px] h-[160px] w-auto object-contain animate-deco-sway z-10 opacity-85",
+  },
+  sleepy: {
+    // 主图：hero-fixed（更温柔的坐姿，右侧大些）
+    main: "/maopu-images/mascot-hero-fixed.png",
+    mainAlt: "猫小扑困困坐姿",
+    mainClass: "absolute bottom-0 left-[5%] h-[82%] max-w-none object-contain object-bottom z-10",
+    // 右侧漂浮全身立绘（小一点）
+    float: "/maopu-images/mascot-full.png",
+    floatAlt: "猫小扑全身",
+    floatClass: "pointer-events-none absolute right-[2%] bottom-[40px] h-[240px] w-auto object-contain animate-gentle-float z-10 opacity-80",
+    // 右上头像
+    deco: "/maopu-images/mascot-avatar.png",
+    decoAlt: "猫小扑头像",
+    decoClass: "pointer-events-none absolute right-8 top-[80px] h-[60px] w-[60px] rounded-full border-2 border-violet-200 bg-white/80 object-cover shadow-soft animate-deco-sway z-20 opacity-90",
+  },
+};
+
+function MascotStage({ variant, onChange }: { variant: MascotVariant; onChange: (variant: MascotVariant) => void }) {
+  const imgs = mascotStageImages[variant];
+
+  return (
+    <div className={`mascot-stage mascot-stage-${variant} relative min-h-[560px] overflow-hidden rounded-[2rem] border border-brand-100 bg-white shadow-soft`}>
+      {/* 形象切换面板 */}
+      <div className="absolute left-6 top-6 z-30 rounded-2xl border border-brand-100 bg-white/90 p-4 shadow-soft backdrop-blur">
+        <p className="text-sm font-bold text-muted">小扑形象</p>
+        <MascotStyleSwitch variant={variant} onChange={onChange} compact />
+      </div>
+
+      {/* 主图 — 随 variant 切换，带淡入效果 */}
+      <AnimatePresence mode="wait">
+        <motion.img
+          key={`main-${variant}`}
+          src={imgs.main}
+          alt={imgs.mainAlt}
+          className={imgs.mainClass}
+          initial={{ opacity: 0, scale: 0.96, y: 10 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.97, y: 6 }}
+          transition={{ duration: 0.38, ease: "easeOut" }}
+        />
+      </AnimatePresence>
+
+      {/* 漂浮图（右上或左上角头像/小图） */}
+      {imgs.float && (
+        <AnimatePresence mode="wait">
+          <motion.img
+            key={`float-${variant}`}
+            src={imgs.float}
+            alt={imgs.floatAlt ?? ""}
+            className={imgs.floatClass ?? ""}
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.32, delay: 0.08 }}
+          />
+        </AnimatePresence>
+      )}
+
+      {/* 装饰小图 */}
+      {imgs.deco && (
+        <AnimatePresence mode="wait">
+          <motion.img
+            key={`deco-${variant}`}
+            src={imgs.deco}
+            alt={imgs.decoAlt ?? ""}
+            className={imgs.decoClass ?? ""}
+            initial={{ opacity: 0, x: 12 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 12 }}
+            transition={{ duration: 0.3, delay: 0.14 }}
+          />
+        </AnimatePresence>
+      )}
+
+      {/* CSS Buddy 小猫（大号，左侧中下） */}
+      <MascotBuddy variant={variant} size="lg" className="absolute left-8 bottom-[196px] z-20" />
+
+      {/* CSS Buddy 小猫（小号，右上角） */}
+      <MascotBuddy
+        variant={variant === "sleepy" ? "planner" : "sleepy"}
+        size="sm"
+        className="absolute right-10 top-[156px] z-20 opacity-80"
+      />
+
+      {/* 底部信息卡片 */}
+      <div className="absolute bottom-6 left-6 right-6 z-20 rounded-2xl border border-brand-100 bg-white/90 p-5 shadow-soft backdrop-blur">
+        <p className="text-sm font-bold text-muted">路线从你的输入开始</p>
+        <p className="mt-1 text-xl font-black">目标识别 → 节点规划 → 依赖地图</p>
+        <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm font-bold text-muted">
+          {["识别目标和当前基础", "抽取关键能力和约束", "生成可编辑知识地图"].map((item) => (
+            <div key={item} className="flex items-center gap-1.5">
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-brand-500" />
+              {item}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LandingPage({
   goal,
   setGoal,
   generating,
   recognizing,
   recognition,
+  mascotVariant,
+  onMascotVariantChange,
   onRecognize,
   onGenerate,
   onNewRoute,
@@ -366,6 +567,8 @@ function LandingPage({
   generating: boolean;
   recognizing: boolean;
   recognition: RecognitionResult | null;
+  mascotVariant: MascotVariant;
+  onMascotVariantChange: (variant: MascotVariant) => void;
   onRecognize: (input: string) => void;
   onGenerate: (goal: string) => void;
   onNewRoute: () => void;
@@ -484,21 +687,7 @@ function LandingPage({
           )}
         </div>
 
-        <div className="relative min-h-[520px] overflow-hidden rounded-[2rem]">
-          <div className="mascot-crop absolute inset-0 rounded-[2rem]" />
-          <div className="absolute inset-x-8 bottom-8 rounded-2xl border border-brand-100 bg-white/88 p-5 shadow-soft backdrop-blur">
-            <p className="text-sm font-bold text-muted">路线从你的输入开始</p>
-            <p className="mt-1 text-2xl font-black">目标识别 → 节点规划 → 依赖地图</p>
-            <div className="mt-4 grid gap-3 text-sm font-bold text-muted">
-              {["识别目标和当前基础", "抽取关键能力和约束", "生成可编辑知识地图"].map((item) => (
-                <div key={item} className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-brand-500" />
-                  {item}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        <MascotStage variant={mascotVariant} onChange={onMascotVariantChange} />
       </section>
 
       <section className="mx-auto grid max-w-[1440px] gap-5 pb-16 lg:grid-cols-3">
@@ -826,7 +1015,17 @@ function InfoList({ title, items }: { title: string; items: string[] }) {
   );
 }
 
-function Assistant({ route, selectedNode }: { route: MaopuRoute; selectedNode: KnowledgeNode | null }) {
+function Assistant({
+  route,
+  selectedNode,
+  mascotVariant,
+  onMascotVariantChange
+}: {
+  route: MaopuRoute;
+  selectedNode: KnowledgeNode | null;
+  mascotVariant: MascotVariant;
+  onMascotVariantChange: (variant: MascotVariant) => void;
+}) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<AssistantAction>("next");
   const [message, setMessage] = useState("选一个动作，小扑会根据当前路线给你建议。");
@@ -879,7 +1078,7 @@ function Assistant({ route, selectedNode }: { route: MaopuRoute; selectedNode: K
         onClick={() => setOpen(true)}
         className="fixed bottom-6 right-6 z-40 flex items-center gap-3 rounded-2xl border border-brand-100 bg-white p-3 pr-5 shadow-panel transition hover:-translate-y-1"
       >
-        <span className="mascot-assistant block h-16 w-16 rounded-full border border-brand-100 bg-brand-50" />
+        <MascotAvatar variant={mascotVariant} className="h-16 w-16" />
         <span className="text-left">
           <span className="block text-sm font-bold text-muted">小扑</span>
           <span className="block font-black text-brand-500">问我路线问题</span>
@@ -895,7 +1094,7 @@ function Assistant({ route, selectedNode }: { route: MaopuRoute; selectedNode: K
           >
             <div className="mb-6 flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <span className="mascot-assistant block h-16 w-16 rounded-full border border-brand-100 bg-brand-50" />
+                <MascotAvatar variant={mascotVariant} className="h-16 w-16" />
                 <div>
                   <h3 className="text-2xl font-black">小扑</h3>
                   <p className="font-semibold text-muted">安静的知识导航员</p>
@@ -907,6 +1106,10 @@ function Assistant({ route, selectedNode }: { route: MaopuRoute; selectedNode: K
             </div>
             <div className="rounded-2xl bg-gradient-to-r from-brand-500 to-violet-500 p-5 text-lg font-bold leading-8 text-white">
               你现在正在看：{target}。我会先帮你理解它为什么存在，再推荐下一步。
+            </div>
+            <div className="mt-4 rounded-2xl border border-line bg-white p-3">
+              <p className="mb-2 text-xs font-black text-muted">切换小扑形象</p>
+              <MascotStyleSwitch variant={mascotVariant} onChange={onMascotVariantChange} compact />
             </div>
             <div className="mt-4 min-h-32 rounded-2xl border border-line p-5 font-semibold leading-7 text-ink">
               {loading ? "小扑正在看这张地图..." : message}
@@ -961,7 +1164,9 @@ function MapPage({
   onDeleteNode,
   onMoveNode,
   onShare,
-  onExport
+  onExport,
+  mascotVariant,
+  onMascotVariantChange
 }: {
   route: MaopuRoute;
   selectedNode: KnowledgeNode | null;
@@ -975,6 +1180,8 @@ function MapPage({
   onMoveNode: (id: string, position: { x: number; y: number }) => void;
   onShare: () => void;
   onExport: (kind: "markdown" | "json" | "svg") => void;
+  mascotVariant: MascotVariant;
+  onMascotVariantChange: (variant: MascotVariant) => void;
 }) {
   const learned = route.nodes.filter((node) => node.status === "learned").length;
   const learning = route.nodes.filter((node) => node.status === "learning").length;
@@ -1118,7 +1325,7 @@ function MapPage({
             <MapCanvas route={route} selectedNodeId={selectedNode?.id ?? null} onSelect={setSelectedNode} onMoveNode={onMoveNode} />
           </ReactFlowProvider>
           <CoursePanel node={selectedNode} onClose={() => setSelectedNode(null)} onUpdate={onUpdateNode} onDelete={onDeleteNode} />
-          <Assistant route={route} selectedNode={selectedNode} />
+          <Assistant route={route} selectedNode={selectedNode} mascotVariant={mascotVariant} onMascotVariantChange={onMascotVariantChange} />
         </section>
       </div>
     </main>
@@ -1584,9 +1791,15 @@ export default function HomePage() {
   const [generating, setGenerating] = useState(false);
   const [recognizing, setRecognizing] = useState(false);
   const [recognition, setRecognition] = useState<RecognitionResult | null>(null);
+  const [mascotVariant, setMascotVariant] = useState<MascotVariant>("planner");
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   useEffect(() => {
+    const savedMascotStyle = window.localStorage.getItem(MASCOT_STYLE_KEY);
+    if (savedMascotStyle === "planner" || savedMascotStyle === "coder" || savedMascotStyle === "sleepy") {
+      setMascotVariant(savedMascotStyle);
+    }
+
     const sharedRoute = decodeSharedRoute(window.location.hash);
     if (sharedRoute) {
       setRoute(sharedRoute);
@@ -1599,6 +1812,12 @@ export default function HomePage() {
     const routes = safeSavedRoutes();
     if (routes[0]) setRoute(routes[0]);
   }, []);
+
+  function updateMascotVariant(nextVariant: MascotVariant) {
+    setMascotVariant(nextVariant);
+    window.localStorage.setItem(MASCOT_STYLE_KEY, nextVariant);
+    notify(`已切换小扑形象：${mascotStyles.find((style) => style.value === nextVariant)?.label ?? "小扑"}`);
+  }
 
   function notify(message: string) {
     const id = Date.now();
@@ -1829,6 +2048,8 @@ export default function HomePage() {
         onMoveNode={moveNode}
         onShare={shareCurrentRoute}
         onExport={exportRoute}
+        mascotVariant={mascotVariant}
+        onMascotVariantChange={updateMascotVariant}
       />
     );
   }
@@ -1852,6 +2073,8 @@ export default function HomePage() {
       generating={generating}
       recognizing={recognizing}
       recognition={recognition}
+      mascotVariant={mascotVariant}
+      onMascotVariantChange={updateMascotVariant}
       onRecognize={recognizeRoute}
       onGenerate={generateRoute}
       onNewRoute={newRoute}

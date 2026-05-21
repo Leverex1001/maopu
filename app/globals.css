@@ -94,3 +94,357 @@ button {
   border-radius: 999px;
   background: #d7d1f8;
 }
+
+.mascot-stage {
+  isolation: isolate;
+}
+
+.mascot-stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 78% 20%, rgba(236, 231, 255, 0.94), transparent 28%),
+    radial-gradient(circle at 22% 72%, rgba(219, 252, 231, 0.7), transparent 24%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 244, 255, 0.92));
+  z-index: 0;
+}
+
+.mascot-stage > * {
+  position: relative;
+}
+
+.mascot-stage-planner {
+  --buddy-main: #8b73ff;
+  --buddy-soft: #ece7ff;
+  --buddy-accent: #5b3df5;
+  --buddy-eye: #5b3df5;
+}
+
+.mascot-stage-coder {
+  --buddy-main: #12b981;
+  --buddy-soft: #dcfce7;
+  --buddy-accent: #2563eb;
+  --buddy-eye: #0f766e;
+}
+
+.mascot-stage-sleepy {
+  --buddy-main: #9ca3af;
+  --buddy-soft: #eef2ff;
+  --buddy-accent: #8b5cf6;
+  --buddy-eye: #64748b;
+}
+
+.maopu-buddy {
+  --buddy-main: #8b73ff;
+  --buddy-soft: #ece7ff;
+  --buddy-accent: #5b3df5;
+  --buddy-eye: #5b3df5;
+  position: relative;
+  display: block;
+  width: 84px;
+  height: 78px;
+  filter: drop-shadow(0 18px 28px rgba(91, 61, 245, 0.18));
+  animation: buddy-breathe 3.6s ease-in-out infinite;
+}
+
+.maopu-buddy-sm {
+  width: 42px;
+  height: 39px;
+}
+
+.maopu-buddy-lg {
+  width: 116px;
+  height: 108px;
+}
+
+.maopu-buddy-planner {
+  --buddy-main: #8b73ff;
+  --buddy-soft: #ece7ff;
+  --buddy-accent: #5b3df5;
+  --buddy-eye: #5b3df5;
+}
+
+.maopu-buddy-coder {
+  --buddy-main: #10b981;
+  --buddy-soft: #dcfce7;
+  --buddy-accent: #2563eb;
+  --buddy-eye: #0f766e;
+}
+
+.maopu-buddy-sleepy {
+  --buddy-main: #a78bfa;
+  --buddy-soft: #eef2ff;
+  --buddy-accent: #64748b;
+  --buddy-eye: #64748b;
+  animation: buddy-sleepy-nod 4s ease-in-out infinite;
+}
+
+.buddy-face {
+  position: absolute;
+  inset: 18% 6% 3%;
+  border: 3px solid var(--buddy-main);
+  border-radius: 48% 48% 44% 44%;
+  background:
+    radial-gradient(circle at 34% 64%, rgba(255, 188, 204, 0.74) 0 8%, transparent 9%),
+    radial-gradient(circle at 66% 64%, rgba(255, 188, 204, 0.74) 0 8%, transparent 9%),
+    linear-gradient(180deg, #ffffff 0%, var(--buddy-soft) 100%);
+}
+
+.buddy-ear {
+  position: absolute;
+  top: 6%;
+  width: 31%;
+  height: 35%;
+  border: 3px solid var(--buddy-main);
+  background: linear-gradient(135deg, #fff 35%, var(--buddy-soft));
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  transform-origin: 50% 100%;
+  animation: buddy-ear-wiggle 2.2s ease-in-out infinite;
+}
+
+.buddy-ear-left {
+  left: 12%;
+  transform: rotate(-18deg);
+}
+
+.buddy-ear-right {
+  right: 12%;
+  transform: rotate(18deg);
+  animation-delay: 0.16s;
+}
+
+.buddy-eye {
+  position: absolute;
+  top: 42%;
+  width: 11%;
+  height: 18%;
+  border-radius: 999px;
+  background: var(--buddy-eye);
+  animation: buddy-blink 4.8s infinite;
+}
+
+.buddy-eye-left {
+  left: 32%;
+}
+
+.buddy-eye-right {
+  right: 32%;
+}
+
+.buddy-mouth {
+  position: absolute;
+  left: 47%;
+  top: 62%;
+  width: 10%;
+  height: 7%;
+  border-bottom: 3px solid var(--buddy-accent);
+  border-radius: 0 0 999px 999px;
+}
+
+.buddy-blush {
+  position: absolute;
+  top: 59%;
+  width: 13%;
+  height: 5%;
+  border-radius: 999px;
+  background: rgba(255, 170, 190, 0.55);
+}
+
+.buddy-blush-left {
+  left: 17%;
+}
+
+.buddy-blush-right {
+  right: 17%;
+}
+
+.buddy-tail {
+  position: absolute;
+  right: -10%;
+  bottom: 5%;
+  width: 36%;
+  height: 42%;
+  border: 4px solid var(--buddy-main);
+  border-left-color: transparent;
+  border-bottom-color: transparent;
+  border-radius: 50%;
+  transform: rotate(34deg);
+  animation: buddy-tail-sway 2.4s ease-in-out infinite;
+}
+
+.buddy-glasses,
+.buddy-sleep {
+  display: none;
+}
+
+.maopu-buddy-coder .buddy-glasses {
+  display: block;
+  position: absolute;
+  left: 27%;
+  top: 39%;
+  width: 46%;
+  height: 20%;
+  border-top: 3px solid var(--buddy-accent);
+}
+
+.maopu-buddy-coder .buddy-glasses::before,
+.maopu-buddy-coder .buddy-glasses::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  width: 38%;
+  height: 92%;
+  border: 3px solid var(--buddy-accent);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.36);
+}
+
+.maopu-buddy-coder .buddy-glasses::before {
+  left: -4%;
+}
+
+.maopu-buddy-coder .buddy-glasses::after {
+  right: -4%;
+}
+
+.maopu-buddy-sleepy .buddy-sleep {
+  display: block;
+  position: absolute;
+  right: 8%;
+  top: -26%;
+  color: var(--buddy-accent);
+  font-weight: 900;
+  font-size: 1.1em;
+  animation: buddy-sleep-z 2.8s ease-in-out infinite;
+}
+
+/* 第二个 Z，延迟出现，营造连续困意 */
+.maopu-buddy-sleepy .buddy-sleep::after {
+  content: "z";
+  position: absolute;
+  right: -14px;
+  top: -10px;
+  font-size: 0.65em;
+  opacity: 0;
+  animation: buddy-sleep-z 2.8s ease-in-out infinite 1.1s;
+}
+
+.maopu-buddy-sleepy .buddy-eye {
+  height: 4%;
+  top: 49%;
+  border-radius: 999px;
+}
+
+/* sleepy 耳朵：慢速、幅度小，有气无力地偶尔动一下 */
+.maopu-buddy-sleepy .buddy-ear {
+  animation: buddy-ear-sleepy 5.4s ease-in-out infinite;
+}
+
+.maopu-buddy-sleepy .buddy-ear-right {
+  animation-delay: 0.7s;
+}
+
+.animate-gentle-float {
+  animation: gentle-float 4.2s ease-in-out infinite;
+}
+
+.animate-deco-sway {
+  animation: deco-sway 5.8s ease-in-out infinite;
+}
+
+/* ── 呼吸浮动（普通形象） ── */
+@keyframes buddy-breathe {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50%       { transform: translateY(-7px) rotate(-1.2deg); }
+}
+
+/* ── 困困摇头（sleepy 形象，更真实的点头/摇头幅度） ── */
+@keyframes buddy-sleepy-nod {
+  0%, 100%  { transform: rotate(0deg) translateY(0); }
+  18%       { transform: rotate(-5deg) translateY(2px); }   /* 慢慢低头 */
+  36%       { transform: rotate(-9deg) translateY(5px); }   /* 快要睡着 */
+  52%       { transform: rotate(0deg) translateY(0); }      /* 猛然回神 */
+  64%       { transform: rotate(6deg) translateY(1px); }    /* 惯性偏右 */
+  80%       { transform: rotate(0deg) translateY(0); }
+}
+
+/* ── 耳朵抖动（更频繁、更有弹性） ── */
+@keyframes buddy-ear-wiggle {
+  0%, 72%, 100% { rotate: 0deg; }
+  76%  { rotate: -10deg; }
+  80%  { rotate: 9deg; }
+  84%  { rotate: -6deg; }
+  88%  { rotate: 4deg; }
+  92%  { rotate: 0deg; }
+}
+
+/* ── 眨眼 ── */
+@keyframes buddy-blink {
+  0%, 90%, 100% { transform: scaleY(1); }
+  94%           { transform: scaleY(0.08); }
+  97%           { transform: scaleY(1); }
+}
+
+/* ── 尾巴摇摆（弹性曲线更自然） ── */
+@keyframes buddy-tail-sway {
+  0%   { transform: rotate(30deg); }
+  28%  { transform: rotate(50deg); }
+  56%  { transform: rotate(26deg); }
+  78%  { transform: rotate(48deg); }
+  100% { transform: rotate(30deg); }
+}
+
+/* ── 睡意 Z 漂浮 ── */
+@keyframes buddy-sleep-z {
+  0%   { opacity: 0; transform: translateY(8px) scale(0.75); }
+  30%  { opacity: 1; }
+  80%  { opacity: 0.8; }
+  100% { opacity: 0; transform: translateY(-14px) scale(1.22); }
+}
+
+/* ── 轻柔上下浮动（头像、全身图） ── */
+@keyframes gentle-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-10px); }
+}
+
+/* ── 装饰小图左右轻摇 ── */
+@keyframes deco-sway {
+  0%, 100% { transform: rotate(-2deg) translateX(0); }
+  30%      { transform: rotate(1.5deg) translateX(3px); }
+  65%      { transform: rotate(-2.5deg) translateX(-2px); }
+}
+
+/* ── sleepy 耳朵：有气无力偶尔耷拉一下 ── */
+@keyframes buddy-ear-sleepy {
+  0%, 60%, 100% { rotate: 0deg; }
+  68%  { rotate: -5deg; }
+  74%  { rotate: 3deg; }
+  80%  { rotate: 0deg; }
+}
+
+@media (max-width: 760px) {
+  /* 主图在移动端稍微缩小、不越界 */
+  .mascot-stage img {
+    max-width: 100%;
+  }
+
+  .mascot-stage .maopu-buddy-lg {
+    left: 1rem;
+    bottom: 13rem;
+    width: 80px;
+    height: 74px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .maopu-buddy,
+  .buddy-ear,
+  .buddy-eye,
+  .buddy-tail,
+  .buddy-sleep,
+  .animate-gentle-float {
+    animation: none;
+  }
+}
