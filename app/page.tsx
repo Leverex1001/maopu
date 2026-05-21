@@ -41,6 +41,7 @@ import {
   Pencil,
   Plus,
   Search,
+  Send,
   Settings,
   Share2,
   Sparkles,
@@ -65,6 +66,8 @@ type Toast = {
   id: number;
   message: string;
 };
+
+type AssistantAction = "next" | "explain" | "resource" | "ask";
 
 const STORAGE_KEY = "maopu.savedRoutes.v1";
 
@@ -676,16 +679,53 @@ function InfoList({ title, items }: { title: string; items: string[] }) {
   );
 }
 
-function Assistant({ selectedNode }: { selectedNode: KnowledgeNode | null }) {
+function Assistant({ route, selectedNode }: { route: MaopuRoute; selectedNode: KnowledgeNode | null }) {
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<"next" | "explain" | "resource">("next");
-  const target = selectedNode?.title ?? "操作系统";
-  const message =
-    mode === "explain"
-      ? selectedNode?.why ?? "操作系统被发明出来，是为了让多个程序公平、安全地共享一台机器。"
-      : mode === "resource"
-        ? `推荐先看：${(selectedNode?.resources ?? ["OSTEP", "MIT 6.S081"]).join("、")}。`
-        : `下一站建议：如果你已经理解数据结构，优先学习${target}；先抓住它解决的核心问题，再进入细节。`;
+  const [mode, setMode] = useState<AssistantAction>("next");
+  const [message, setMessage] = useState("选一个动作，小扑会根据当前路线给你建议。");
+  const [loading, setLoading] = useState(false);
+  const [question, setQuestion] = useState("");
+  const currentNode = selectedNode ?? route.nodes[0] ?? null;
+  const target = currentNode?.title ?? route.title;
+  const actionButtonClass = (action: AssistantAction) =>
+    `px-3 py-3 text-sm ${mode === action ? "!border-brand-500 !bg-brand-50 !text-brand-500" : ""}`;
+
+  async function requestAssistant(action: AssistantAction, nextQuestion?: string) {
+    setMode(action);
+    setLoading(true);
+
+    try {
+      const response = await fetch("/api/assistant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ route, currentNode, action, question: nextQuestion })
+      });
+
+      if (!response.ok) throw new Error("Assistant request failed");
+      const data = (await response.json()) as { message?: string };
+      setMessage(data.message || "小扑暂时没想好，但你可以先从当前节点的前置知识开始。");
+    } catch {
+      setMessage("小扑暂时连不上 AI 服务。先看当前节点的前置知识，再做一个小项目验证理解。");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    void requestAssistant("next");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentNode, open, route]);
+
+  function submitQuestion(event: FormEvent) {
+    event.preventDefault();
+    const nextQuestion = question.trim();
+    if (!nextQuestion || loading) return;
+    void requestAssistant("ask", nextQuestion);
+    setQuestion("");
+  }
+
+
   return (
     <>
       <button
@@ -721,15 +761,40 @@ function Assistant({ selectedNode }: { selectedNode: KnowledgeNode | null }) {
             <div className="rounded-2xl bg-gradient-to-r from-brand-500 to-violet-500 p-5 text-lg font-bold leading-8 text-white">
               你现在正在看：{target}。我会先帮你理解它为什么存在，再推荐下一步。
             </div>
-            <div className="mt-4 rounded-2xl border border-line p-5 font-semibold leading-7 text-ink">{message}</div>
-            <div className="mt-5 grid grid-cols-2 gap-3">
-              <OutlineButton onClick={() => setMode("explain")} className="px-3 py-3">
+            <div className="mt-4 min-h-32 rounded-2xl border border-line p-5 font-semibold leading-7 text-ink">
+              {loading ? "小扑正在看这张地图..." : message}
+            </div>
+            <div className="mt-5 grid grid-cols-3 gap-3">
+              <OutlineButton disabled={loading} onClick={() => requestAssistant("explain")} className={actionButtonClass("explain")}>
                 解释概念
               </OutlineButton>
-              <OutlineButton onClick={() => setMode("resource")} className="px-3 py-3">
+              <OutlineButton disabled={loading} onClick={() => requestAssistant("resource")} className={actionButtonClass("resource")}>
                 推荐资源
               </OutlineButton>
+              <OutlineButton disabled={loading} onClick={() => requestAssistant("next")} className={actionButtonClass("next")}>
+                下一步学什么
+              </OutlineButton>
             </div>
+            <form onSubmit={submitQuestion} className="mt-4 flex gap-2">
+              <label className="sr-only" htmlFor="assistant-question">
+                问小扑
+              </label>
+              <input
+                id="assistant-question"
+                value={question}
+                onChange={(event) => setQuestion(event.target.value)}
+                className="min-w-0 flex-1 rounded-xl border border-line px-4 py-3 font-semibold outline-none focus:border-brand-500"
+                placeholder="问一个路线问题"
+              />
+              <button
+                type="submit"
+                disabled={loading || !question.trim()}
+                className="grid h-12 w-12 place-items-center rounded-xl bg-brand-500 text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
+                title="发送问题"
+              >
+                <Send className="h-5 w-5" />
+              </button>
+            </form>
           </motion.div>
         )}
       </AnimatePresence>
@@ -876,7 +941,7 @@ function MapPage({
             <MapCanvas route={route} selectedNodeId={selectedNode?.id ?? null} onSelect={setSelectedNode} onMoveNode={onMoveNode} />
           </ReactFlowProvider>
           <CoursePanel node={selectedNode} onClose={() => setSelectedNode(null)} onUpdate={onUpdateNode} onDelete={onDeleteNode} />
-          <Assistant selectedNode={selectedNode} />
+          <Assistant route={route} selectedNode={selectedNode} />
         </section>
       </div>
     </main>
