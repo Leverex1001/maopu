@@ -3,6 +3,7 @@
 import "@xyflow/react/dist/style.css";
 
 import { AnimatePresence, motion } from "framer-motion";
+import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from "lz-string";
 import {
   Background,
   Controls,
@@ -181,6 +182,25 @@ function safeSavedRoutes(): MaopuRoute[] {
   } catch {
     window.localStorage.removeItem(STORAGE_KEY);
     return [];
+  }
+}
+
+function encodeRouteForShare(route: MaopuRoute) {
+  return compressToEncodedURIComponent(JSON.stringify(route));
+}
+
+function decodeSharedRoute(hash: string): MaopuRoute | null {
+  const params = new URLSearchParams(hash.replace(/^#/, ""));
+  const payload = params.get("route");
+  if (!payload) return null;
+  try {
+    const text = decompressFromEncodedURIComponent(payload);
+    if (!text) return null;
+    const route = JSON.parse(text) as Partial<MaopuRoute>;
+    if (!route.title || !Array.isArray(route.nodes) || !Array.isArray(route.edges)) return null;
+    return route as MaopuRoute;
+  } catch {
+    return null;
   }
 }
 
@@ -940,6 +960,7 @@ function MapPage({
   onUpdateNode,
   onDeleteNode,
   onMoveNode,
+  onShare,
   onExport
 }: {
   route: MaopuRoute;
@@ -952,6 +973,7 @@ function MapPage({
   onUpdateNode: (node: KnowledgeNode) => void;
   onDeleteNode: (nodeId: string) => void;
   onMoveNode: (id: string, position: { x: number; y: number }) => void;
+  onShare: () => void;
   onExport: (kind: "markdown" | "json" | "svg") => void;
 }) {
   const learned = route.nodes.filter((node) => node.status === "learned").length;
@@ -1006,6 +1028,10 @@ function MapPage({
           </OutlineButton>
           <OutlineButton onClick={() => setView("upload")} className="hidden lg:block">
             导入路线
+          </OutlineButton>
+          <OutlineButton onClick={onShare} className="hidden items-center gap-2 lg:flex">
+            <Share2 className="h-5 w-5" />
+            分享
           </OutlineButton>
           <div className="relative hidden lg:block">
             <OutlineButton onClick={() => setExportOpen((value) => !value)} className="flex items-center gap-2">
@@ -1113,6 +1139,7 @@ function UploadPage({
   const [fileName, setFileName] = useState("");
   const [sourceText, setSourceText] = useState("");
   const [githubUrl, setGithubUrl] = useState("");
+  const [parseSummary, setParseSummary] = useState("");
   const [parsing, setParsing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -1120,9 +1147,9 @@ function UploadPage({
     setParsing(true);
     setFileName(file.name);
     try {
-      const text = await file.text();
-      const trimmed = text.trim();
       if (file.name.toLowerCase().endsWith(".json")) {
+        const text = await file.text();
+        const trimmed = text.trim();
         const parsed = JSON.parse(trimmed) as Partial<MaopuRoute>;
         if (parsed.title && Array.isArray(parsed.nodes) && Array.isArray(parsed.edges)) {
           onImportRoute(parsed as MaopuRoute);
@@ -1131,13 +1158,50 @@ function UploadPage({
         }
       }
 
-      const readableText = trimmed || `文件名：${file.name}；大小：${Math.round(file.size / 1024)}KB。请根据这个学习材料文件规划路线。`;
-      setSourceText(readableText.slice(0, 5000));
-      notify("已读取文件内容，可生成路线");
+      const form = new FormData();
+      form.append("file", file);
+      const response = await fetch("/api/parse-material", {
+        method: "POST",
+        body: form
+      });
+      if (!response.ok) throw new Error("Parse failed");
+      const parsed = (await response.json()) as { text: string; summary: string; sourceName: string; sourceType: string };
+      setSourceText(parsed.text);
+      setParseSummary(parsed.summary);
+      notify(`已解析 ${parsed.sourceName}`);
     } catch {
       const fallback = `我上传了 ${file.name}，文件大小约 ${Math.round(file.size / 1024)}KB。请根据文件主题为我规划学习路线。`;
       setSourceText(fallback);
+      setParseSummary("解析失败，已保留文件名和大小作为路线生成线索。");
       notify("文件无法直接读取，已使用文件信息生成提示");
+    } finally {
+      setParsing(false);
+    }
+  }
+
+  async function parseExternalUrl() {
+    const url = githubUrl.trim();
+    if (!url) {
+      notify("请先填写 GitHub 或网页链接");
+      return;
+    }
+
+    setParsing(true);
+    try {
+      const response = await fetch("/api/parse-material", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url })
+      });
+      if (!response.ok) throw new Error("URL parse failed");
+      const parsed = (await response.json()) as { text: string; summary: string; sourceName: string };
+      setSourceText((current) => [current.trim(), parsed.text].filter(Boolean).join("\n\n"));
+      setParseSummary(parsed.summary);
+      notify(`已解析 ${parsed.sourceName}`);
+    } catch {
+      setSourceText((current) => [current.trim(), `链接：${url}\n请根据该链接代表的项目或资料规划学习路线。`].filter(Boolean).join("\n\n"));
+      setParseSummary("链接抓取失败，已把链接本身加入资料。");
+      notify("链接无法抓取，已保留链接作为线索");
     } finally {
       setParsing(false);
     }
@@ -1200,6 +1264,7 @@ function UploadPage({
             className="mt-3 min-h-52 w-full resize-y rounded-2xl border border-line px-5 py-4 leading-7 outline-none focus:border-brand-500"
             placeholder="可以粘贴课程大纲、岗位 JD、考试范围、学习笔记，猫扑会先识别再生成路线。"
           />
+          {parseSummary && <p className="mt-3 rounded-xl bg-brand-50 px-4 py-3 font-bold text-brand-500">{parseSummary}</p>}
 
           <label className="mt-6 block text-xl font-black" htmlFor="githubUrl">
             GitHub / 网页链接
@@ -1213,6 +1278,10 @@ function UploadPage({
           />
 
           <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <OutlineButton disabled={parsing || !githubUrl.trim()} onClick={() => void parseExternalUrl()} className="flex items-center justify-center gap-2 disabled:opacity-50">
+              <GitFork className="h-5 w-5" />
+              解析链接
+            </OutlineButton>
             <PrimaryButton onClick={submitMaterial} className="flex items-center justify-center gap-2">
               <Sparkles className="h-5 w-5" />
               识别资料并生成路线
@@ -1222,6 +1291,7 @@ function UploadPage({
                 setSourceText("");
                 setGithubUrl("");
                 setFileName("");
+                setParseSummary("");
                 notify("已清空导入内容");
               }}
             >
@@ -1517,6 +1587,15 @@ export default function HomePage() {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   useEffect(() => {
+    const sharedRoute = decodeSharedRoute(window.location.hash);
+    if (sharedRoute) {
+      setRoute(sharedRoute);
+      setView("map");
+      saveRoute(sharedRoute, { silent: true });
+      notify("已打开分享路线");
+      return;
+    }
+
     const routes = safeSavedRoutes();
     if (routes[0]) setRoute(routes[0]);
   }, []);
@@ -1529,12 +1608,12 @@ export default function HomePage() {
     }, 2400);
   }
 
-  function saveRoute(nextRoute = route) {
+  function saveRoute(nextRoute = route, options: { silent?: boolean } = {}) {
     const routes = safeSavedRoutes();
     const nextId = routeStorageId(nextRoute);
     const withoutCurrent = routes.filter((item) => routeStorageId(item) !== nextId && item.title !== nextRoute.title);
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify([nextRoute, ...withoutCurrent].slice(0, 12)));
-    notify("路线已保存到本地");
+    if (!options.silent) notify("路线已保存到本地");
   }
 
   function importRoute(nextRoute: MaopuRoute) {
@@ -1627,6 +1706,23 @@ export default function HomePage() {
       downloadText(routeFilename(route, "svg"), routeToSvg(route), "image/svg+xml;charset=utf-8");
     }
     notify("导出文件已生成");
+  }
+
+  async function shareCurrentRoute() {
+    if (route.nodes.length === 0) {
+      notify("空白路线还不能分享");
+      return;
+    }
+
+    const hash = `route=${encodeRouteForShare(route)}`;
+    const url = `${window.location.origin}${window.location.pathname}#${hash}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      notify("分享链接已复制");
+    } catch {
+      window.location.hash = hash;
+      notify("已生成分享链接，可从地址栏复制");
+    }
   }
 
   function withToasts(children: React.ReactNode) {
@@ -1731,6 +1827,7 @@ export default function HomePage() {
         onUpdateNode={updateNode}
         onDeleteNode={deleteNode}
         onMoveNode={moveNode}
+        onShare={shareCurrentRoute}
         onExport={exportRoute}
       />
     );
