@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createChatCompletion, hasAiConfig } from "@/lib/ai-client";
+import { checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { defaultRoute, Domain, routeForGoal, Route as MaopuRoute } from "@/lib/route-data";
 
 type GenerateRequest = {
@@ -26,6 +27,14 @@ export async function POST(request: Request) {
     return NextResponse.json(routeForGoal(goal));
   }
 
+  const rateLimit = checkRateLimit(request, "generate");
+  if (!rateLimit.ok) {
+    return NextResponse.json(
+      { error: "AI route generation limit reached. Please try again later." },
+      { status: 429, headers: rateLimitHeaders(rateLimit) }
+    );
+  }
+
   try {
     const text = await createChatCompletion({
       messages: [
@@ -42,10 +51,10 @@ export async function POST(request: Request) {
       summary: "AI 已按目标生成 12 个核心学习节点。",
       courses: parseCourseList(text)
     };
-    return NextResponse.json(routeFromOutline(outline, goal));
+    return NextResponse.json(routeFromOutline(outline, goal), { headers: rateLimitHeaders(rateLimit) });
   } catch (error) {
     console.warn("AI route fallback:", error instanceof Error ? error.message : "unknown error");
-    return NextResponse.json(routeForGoal(goal));
+    return NextResponse.json(routeForGoal(goal), { headers: rateLimitHeaders(rateLimit) });
   }
 }
 

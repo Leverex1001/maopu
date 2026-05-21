@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createChatCompletion, hasAiConfig } from "@/lib/ai-client";
+import { checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 
 type RecognizeRequest = {
   input?: string;
@@ -37,6 +38,14 @@ export async function POST(request: Request) {
     return NextResponse.json(localRecognize(input));
   }
 
+  const rateLimit = checkRateLimit(request, "recognize");
+  if (!rateLimit.ok) {
+    return NextResponse.json(
+      { error: "AI recognition limit reached. Please try again later." },
+      { status: 429, headers: rateLimitHeaders(rateLimit) }
+    );
+  }
+
   try {
     const content = await createChatCompletion({
       messages: [
@@ -49,10 +58,10 @@ export async function POST(request: Request) {
       timeoutMs: 10000
     });
 
-    return NextResponse.json(normalizeRecognition(JSON.parse(stripCodeFence(content)), input));
+    return NextResponse.json(normalizeRecognition(JSON.parse(stripCodeFence(content)), input), { headers: rateLimitHeaders(rateLimit) });
   } catch (error) {
     console.warn("Route recognition fallback:", error instanceof Error ? error.message : "unknown error");
-    return NextResponse.json(localRecognize(input));
+    return NextResponse.json(localRecognize(input), { headers: rateLimitHeaders(rateLimit) });
   }
 }
 

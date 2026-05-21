@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createChatCompletion, hasAiConfig } from "@/lib/ai-client";
+import { checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { KnowledgeNode, Route as MaopuRoute } from "@/lib/route-data";
 
 type AssistantAction = "explain" | "resource" | "next" | "ask";
@@ -33,8 +34,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: fallbackMessage(action, route, currentNode, question) });
   }
 
+  const rateLimit = checkRateLimit(request, "assistant");
+  if (!rateLimit.ok) {
+    return NextResponse.json(
+      { error: "AI assistant limit reached. Please try again later." },
+      { status: 429, headers: rateLimitHeaders(rateLimit) }
+    );
+  }
+
   const content = await tryAssistantCompletion(action, route, currentNode, question);
-  return NextResponse.json({ message: content ?? fallbackMessage(action, route, currentNode, question) });
+  return NextResponse.json(
+    { message: content ?? fallbackMessage(action, route, currentNode, question) },
+    { headers: rateLimitHeaders(rateLimit) }
+  );
 }
 
 async function tryAssistantCompletion(action: AssistantAction, route: MaopuRoute | undefined, node: KnowledgeNode | null, question?: string) {

@@ -99,6 +99,11 @@
 - API key 只通过服务端环境变量读取，不进入前端 bundle。
 - `.env.local` 被 `.gitignore` 排除，不应提交到 GitHub。
 - `.env.example` 只包含变量名和示例值。
+- AI 接口有第一版内存限流保护：
+  - 默认每小时每个访问来源可生成路线 12 次。
+  - 默认每小时可识别需求 30 次。
+  - 默认每小时可调用小扑助手 60 次。
+  - 可通过 `AI_RATE_LIMIT_WINDOW_MS`、`AI_RATE_LIMIT_GENERATE`、`AI_RATE_LIMIT_RECOGNIZE`、`AI_RATE_LIMIT_ASSISTANT` 调整。
 
 ## 还没实现
 
@@ -183,6 +188,10 @@ cp .env.example .env.local
 AI_BASE_URL=https://api.deepseek.com
 AI_API_KEY=your-api-key-here
 AI_MODEL=deepseek-chat
+AI_RATE_LIMIT_WINDOW_MS=3600000
+AI_RATE_LIMIT_GENERATE=12
+AI_RATE_LIMIT_RECOGNIZE=30
+AI_RATE_LIMIT_ASSISTANT=60
 ```
 
 启动开发服务器：
@@ -205,6 +214,10 @@ npm run build
 AI_BASE_URL=https://api.deepseek.com
 AI_API_KEY=your-api-key-here
 AI_MODEL=deepseek-chat
+AI_RATE_LIMIT_WINDOW_MS=3600000
+AI_RATE_LIMIT_GENERATE=12
+AI_RATE_LIMIT_RECOGNIZE=30
+AI_RATE_LIMIT_ASSISTANT=60
 ```
 
 不要把真实 API key 写入源码、README、前端代码或 GitHub commit。
