@@ -28,6 +28,15 @@ type GithubReadme = {
   name?: string;
 };
 
+class MaterialParseError extends Error {
+  constructor(
+    message: string,
+    readonly status = 400
+  ) {
+    super(message);
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const contentType = request.headers.get("content-type") ?? "";
@@ -38,6 +47,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
       }
 
+      assertFileSize(file);
       const parsed = await parseFile(file);
       return NextResponse.json(parsed);
     }
@@ -54,12 +64,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No material provided" }, { status: 400 });
   } catch (error) {
     console.warn("Material parse failed:", error instanceof Error ? error.message : "unknown error");
+    const status = error instanceof MaterialParseError ? error.status : 500;
     return NextResponse.json(
       {
         error: "Material parse failed",
         message: error instanceof Error ? error.message : "unknown error"
       },
-      { status: 500 }
+      { status }
     );
   }
 }
@@ -151,6 +162,7 @@ async function parseUrl(url: string): Promise<ParseMaterialResponse> {
   if (!response.ok) {
     throw new Error(`URL fetch failed: ${response.status}`);
   }
+  assertUrlSize(response);
 
   const html = await response.text();
   const text = normalizeText(
@@ -169,6 +181,29 @@ async function parseUrl(url: string): Promise<ParseMaterialResponse> {
     summary: summarizeText(text, "网页"),
     meta: { url }
   };
+}
+
+function assertFileSize(file: File) {
+  const maxBytes = readByteLimit("MATERIAL_MAX_FILE_MB", 8);
+  if (file.size <= maxBytes) return;
+  throw new MaterialParseError(`文件超过 ${formatMb(maxBytes)}MB，请先压缩或截取核心内容。`, 413);
+}
+
+function assertUrlSize(response: Response) {
+  const maxBytes = readByteLimit("MATERIAL_MAX_URL_MB", 2);
+  const contentLength = Number.parseInt(response.headers.get("content-length") ?? "", 10);
+  if (!Number.isFinite(contentLength) || contentLength <= maxBytes) return;
+  throw new MaterialParseError(`网页内容超过 ${formatMb(maxBytes)}MB，请改用摘要或核心片段。`, 413);
+}
+
+function readByteLimit(name: string, fallbackMb: number) {
+  const value = Number.parseFloat(process.env[name] ?? "");
+  const mb = Number.isFinite(value) && value > 0 ? value : fallbackMb;
+  return Math.round(mb * 1024 * 1024);
+}
+
+function formatMb(bytes: number) {
+  return Math.round((bytes / 1024 / 1024) * 10) / 10;
 }
 
 async function parseGithubRepository(owner: string, repo: string): Promise<ParseMaterialResponse> {
