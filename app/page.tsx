@@ -49,7 +49,7 @@ import {
   UploadCloud,
   X
 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   defaultRoute,
   Domain,
@@ -77,13 +77,67 @@ type RecognitionResult = {
   prompt: string;
 };
 
-const STORAGE_KEY = "maopu.savedRoutes.v1";
+type CommunityRouteCard = {
+  title: string;
+  author: string;
+  rating: string;
+  learners: string;
+  categories: string[];
+  prompt: string;
+};
 
-const routeCards = [
-  { title: "MIT 计算机科学路线", author: "MIT OpenCourseWare", rating: "4.8", learners: "12.4k" },
-  { title: "OpenAI 工程师路线", author: "OpenAI Cookbook", rating: "4.9", learners: "8.7k" },
-  { title: "独立游戏开发路线", author: "Indie Game Dev", rating: "4.6", learners: "5.2k" },
-  { title: "AI 科研路线", author: "Papers + Lab", rating: "4.8", learners: "9.1k" }
+const STORAGE_KEY = "maopu.savedRoutes.v1";
+const FAVORITES_KEY = "maopu.favoriteCommunityRoutes.v1";
+
+const routeCards: CommunityRouteCard[] = [
+  {
+    title: "MIT 计算机科学路线",
+    author: "MIT OpenCourseWare",
+    rating: "4.8",
+    learners: "12.4k",
+    categories: ["热门", "就业"],
+    prompt: "参考 MIT OpenCourseWare，为计算机科学基础学习者规划一条包含编程、数学、系统、算法和项目实践的路线"
+  },
+  {
+    title: "OpenAI 工程师路线",
+    author: "OpenAI Cookbook",
+    rating: "4.9",
+    learners: "8.7k",
+    categories: ["热门", "AI", "就业"],
+    prompt: "为想成为 AI 应用工程师的人规划路线，覆盖大模型 API、提示工程、RAG、评估、部署和产品项目"
+  },
+  {
+    title: "独立游戏开发路线",
+    author: "Indie Game Dev",
+    rating: "4.6",
+    learners: "5.2k",
+    categories: ["热门", "游戏开发"],
+    prompt: "为独立游戏开发者规划路线，覆盖游戏设计、引擎、图形、物理、关卡、发布和作品集"
+  },
+  {
+    title: "计算机考研 408 路线",
+    author: "408 Study Plan",
+    rating: "4.7",
+    learners: "15.1k",
+    categories: ["热门", "考研"],
+    prompt: "为计算机考研 408 规划系统复习路线，覆盖数据结构、组成原理、操作系统、计算机网络和阶段练习"
+  },
+  {
+    title: "前端就业项目路线",
+    author: "Frontend Career",
+    rating: "4.6",
+    learners: "6.9k",
+    categories: ["最新", "就业"],
+    prompt: "为前端就业准备规划路线，覆盖 HTML CSS JavaScript React Next.js 工程化、项目作品和面试复盘"
+  },
+  {
+    title: "AI 科研入门路线",
+    author: "Papers + Lab",
+    rating: "4.8",
+    learners: "9.1k",
+    categories: ["最新", "AI"],
+    prompt: "为 AI 科研入门规划路线，覆盖数学基础、机器学习、深度学习、论文阅读、实验复现和研究问题定义"
+  }
 ];
 
 const domainOptions = Object.entries(domainStyles).map(([value, style]) => ({
@@ -108,12 +162,26 @@ function createBlankRoute(title = "我的自定义路线"): MaopuRoute {
   };
 }
 
-function cloneRoute(route: MaopuRoute): MaopuRoute {
-  return JSON.parse(JSON.stringify(route)) as MaopuRoute;
-}
-
 function routeStorageId(route: MaopuRoute) {
   return `${route.title}-${route.nodes.length}-${route.edges.length}`;
+}
+
+function calculateProgress(route: MaopuRoute) {
+  if (!route.nodes.length) return 0;
+  const learned = route.nodes.filter((node) => node.status === "learned").length;
+  const learning = route.nodes.filter((node) => node.status === "learning").length;
+  return Math.round(((learned + learning * 0.5) / route.nodes.length) * 100);
+}
+
+function safeSavedRoutes(): MaopuRoute[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const saved = window.localStorage.getItem(STORAGE_KEY);
+    return saved ? (JSON.parse(saved) as MaopuRoute[]) : [];
+  } catch {
+    window.localStorage.removeItem(STORAGE_KEY);
+    return [];
+  }
 }
 
 function downloadText(filename: string, content: string, type = "text/plain;charset=utf-8") {
@@ -890,12 +958,18 @@ function MapPage({
   const learning = route.nodes.filter((node) => node.status === "learning").length;
   const [search, setSearch] = useState("");
   const [exportOpen, setExportOpen] = useState(false);
+  const [searchMiss, setSearchMiss] = useState("");
 
   function findNode() {
     const keyword = search.trim().toLowerCase();
     if (!keyword) return;
     const match = route.nodes.find((node) => node.title.toLowerCase().includes(keyword));
-    if (match) setSelectedNode(match);
+    if (match) {
+      setSelectedNode(match);
+      setSearchMiss("");
+    } else {
+      setSearchMiss(`没有找到「${search.trim()}」`);
+    }
   }
 
   return (
@@ -921,6 +995,7 @@ function MapPage({
               className="w-32 bg-transparent outline-none"
             />
           </div>
+          {searchMiss && <span className="hidden rounded-xl bg-rose-50 px-3 py-2 text-sm font-bold text-rose-600 lg:inline">{searchMiss}</span>}
           <OutlineButton onClick={onSave} className="hidden items-center gap-2 lg:flex">
             <CheckCircle2 className="h-5 w-5" />
             保存
@@ -1024,42 +1099,143 @@ function MapPage({
   );
 }
 
-function UploadPage({ onGenerate, setView }: { onGenerate: (goal: string) => void; setView: (view: View) => void }) {
+function UploadPage({
+  onGenerate,
+  onImportRoute,
+  notify,
+  setView
+}: {
+  onGenerate: (goal: string) => void;
+  onImportRoute: (route: MaopuRoute) => void;
+  notify: (message: string) => void;
+  setView: (view: View) => void;
+}) {
   const [fileName, setFileName] = useState("");
+  const [sourceText, setSourceText] = useState("");
+  const [githubUrl, setGithubUrl] = useState("");
   const [parsing, setParsing] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  function simulateUpload() {
-    setFileName("培养计划.pdf");
+  async function handleFile(file: File) {
     setParsing(true);
-    window.setTimeout(() => {
+    setFileName(file.name);
+    try {
+      const text = await file.text();
+      const trimmed = text.trim();
+      if (file.name.toLowerCase().endsWith(".json")) {
+        const parsed = JSON.parse(trimmed) as Partial<MaopuRoute>;
+        if (parsed.title && Array.isArray(parsed.nodes) && Array.isArray(parsed.edges)) {
+          onImportRoute(parsed as MaopuRoute);
+          notify("已导入 JSON 路线");
+          return;
+        }
+      }
+
+      const readableText = trimmed || `文件名：${file.name}；大小：${Math.round(file.size / 1024)}KB。请根据这个学习材料文件规划路线。`;
+      setSourceText(readableText.slice(0, 5000));
+      notify("已读取文件内容，可生成路线");
+    } catch {
+      const fallback = `我上传了 ${file.name}，文件大小约 ${Math.round(file.size / 1024)}KB。请根据文件主题为我规划学习路线。`;
+      setSourceText(fallback);
+      notify("文件无法直接读取，已使用文件信息生成提示");
+    } finally {
       setParsing(false);
-      onGenerate("根据培养计划生成 CS 知识地图");
-    }, 900);
+    }
+  }
+
+  function submitMaterial() {
+    const material = [sourceText.trim(), githubUrl.trim() ? `GitHub 链接：${githubUrl.trim()}` : ""].filter(Boolean).join("\n\n");
+    if (!material) {
+      notify("请先选择文件、粘贴资料或填写 GitHub 链接");
+      return;
+    }
+    onGenerate(`请识别以下学习资料并生成知识路线：\n${material.slice(0, 6000)}`);
   }
 
   return (
     <Shell title="上传解析中心" setView={setView}>
       <div className="mx-auto grid max-w-[1440px] gap-10 px-6 py-12 lg:grid-cols-[1.45fr_.85fr]">
-        <button
-          onClick={simulateUpload}
-          className="grid min-h-[560px] place-items-center rounded-3xl border-2 border-dashed border-brand-100 bg-white text-center shadow-soft transition hover:border-brand-500"
-        >
-          <div>
-            <span className="mx-auto grid h-28 w-28 place-items-center rounded-full bg-brand-50 text-brand-500">
-              <UploadCloud className="h-14 w-14" />
-            </span>
-            <h2 className="mt-8 text-4xl font-black">拖拽文件到此处，或点击上传</h2>
-            <p className="mt-5 text-xl text-muted">支持 PDF / Excel / Markdown / GitHub 链接</p>
-            <PrimaryButton className="mt-10">{parsing ? "正在解析..." : fileName || "选择文件"}</PrimaryButton>
+        <section className="rounded-3xl border border-line bg-white p-8 shadow-soft">
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            accept=".txt,.md,.markdown,.json,.csv,.tsv,.pdf,.xlsx,.xls"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void handleFile(file);
+              event.currentTarget.value = "";
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={(event) => {
+              event.preventDefault();
+              const file = event.dataTransfer.files?.[0];
+              if (file) void handleFile(file);
+            }}
+            className="grid min-h-[300px] w-full place-items-center rounded-3xl border-2 border-dashed border-brand-100 bg-brand-50/30 text-center transition hover:border-brand-500"
+          >
+            <div>
+              <span className="mx-auto grid h-24 w-24 place-items-center rounded-full bg-white text-brand-500 shadow-soft">
+                <UploadCloud className="h-12 w-12" />
+              </span>
+              <h2 className="mt-7 text-4xl font-black">选择或拖入学习资料</h2>
+              <p className="mt-4 text-xl text-muted">支持 Markdown / JSON 路线 / CSV / 文本；PDF 和 Excel 会先读取文件信息</p>
+              <span className="mt-8 inline-flex rounded-xl bg-gradient-to-r from-brand-500 to-violet-500 px-7 py-4 font-bold text-white shadow-soft">
+                {parsing ? "正在读取..." : fileName || "选择文件"}
+              </span>
+            </div>
+          </button>
+
+          <label className="mt-8 block text-xl font-black" htmlFor="sourceText">
+            资料内容
+          </label>
+          <textarea
+            id="sourceText"
+            value={sourceText}
+            onChange={(event) => setSourceText(event.target.value)}
+            className="mt-3 min-h-52 w-full resize-y rounded-2xl border border-line px-5 py-4 leading-7 outline-none focus:border-brand-500"
+            placeholder="可以粘贴课程大纲、岗位 JD、考试范围、学习笔记，猫扑会先识别再生成路线。"
+          />
+
+          <label className="mt-6 block text-xl font-black" htmlFor="githubUrl">
+            GitHub / 网页链接
+          </label>
+          <input
+            id="githubUrl"
+            value={githubUrl}
+            onChange={(event) => setGithubUrl(event.target.value)}
+            className="mt-3 w-full rounded-2xl border border-line px-5 py-4 font-semibold outline-none focus:border-brand-500"
+            placeholder="https://github.com/owner/repo 或课程网页链接"
+          />
+
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <PrimaryButton onClick={submitMaterial} className="flex items-center justify-center gap-2">
+              <Sparkles className="h-5 w-5" />
+              识别资料并生成路线
+            </PrimaryButton>
+            <OutlineButton
+              onClick={() => {
+                setSourceText("");
+                setGithubUrl("");
+                setFileName("");
+                notify("已清空导入内容");
+              }}
+            >
+              清空
+            </OutlineButton>
           </div>
-        </button>
+        </section>
         <div className="rounded-3xl border border-line bg-white p-10 shadow-soft">
           <h2 className="text-3xl font-black">支持的格式</h2>
           {[
-            [FileText, "PDF 培养计划", "学位课程规、培养方案等"],
-            [Layers3, "Excel 表格", "课程清单、学习计划等"],
-            [Code2, "Markdown 文件", "自定义 roadmap 文件"],
-            [GitFork, "GitHub 链接", "开源学习路线仓库"]
+            [FileText, "文本 / Markdown", "直接读取内容并交给 AI 识别"],
+            [Layers3, "JSON 路线", "符合 Route 结构时可直接导入地图"],
+            [Code2, "CSV / 表格文本", "可根据课程清单生成路线"],
+            [GitFork, "GitHub 链接", "作为资料来源纳入路线规划"]
           ].map(([Icon, title, desc]) => (
             <div key={String(title)} className="mt-10 flex gap-5">
               <Icon className="h-10 w-10 text-ink" />
@@ -1075,72 +1251,185 @@ function UploadPage({ onGenerate, setView }: { onGenerate: (goal: string) => voi
   );
 }
 
-function CommunityPage({ onGenerate, setView }: { onGenerate: (goal: string) => void; setView: (view: View) => void }) {
+function CommunityPage({
+  onGenerate,
+  notify,
+  setView
+}: {
+  onGenerate: (goal: string) => void;
+  notify: (message: string) => void;
+  setView: (view: View) => void;
+}) {
+  const [activeTab, setActiveTab] = useState("热门");
+  const [favorites, setFavorites] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      return JSON.parse(window.localStorage.getItem(FAVORITES_KEY) || "[]") as string[];
+    } catch {
+      return [];
+    }
+  });
+  const tabs = ["热门", "最新", "考研", "就业", "AI", "游戏开发", "收藏"];
+  const filteredCards =
+    activeTab === "收藏" ? routeCards.filter((card) => favorites.includes(card.title)) : routeCards.filter((card) => card.categories.includes(activeTab));
+
+  function toggleFavorite(title: string) {
+    setFavorites((current) => {
+      const next = current.includes(title) ? current.filter((item) => item !== title) : [...current, title];
+      window.localStorage.setItem(FAVORITES_KEY, JSON.stringify(next));
+      notify(next.includes(title) ? "已收藏路线" : "已取消收藏");
+      return next;
+    });
+  }
+
+  async function shareRoute(card: CommunityRouteCard) {
+    const text = `${card.title} - ${card.prompt}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      notify("路线信息已复制，可发给别人");
+    } catch {
+      notify("浏览器限制剪贴板，路线信息暂未复制");
+    }
+  }
+
   return (
     <Shell title="路线社区" setView={setView}>
       <div className="mx-auto max-w-[1440px] px-6 py-12">
         <div className="mb-10 flex flex-wrap items-center justify-between gap-5">
           <div className="flex flex-wrap gap-4 text-xl font-bold">
-            {["热门", "最新", "考研", "就业", "AI", "游戏开发", "更多"].map((tab, index) => (
-              <button key={tab} className={`rounded-2xl px-7 py-4 ${index === 0 ? "bg-brand-50 text-brand-500" : "text-muted"}`}>
+            {tabs.map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`rounded-2xl px-7 py-4 ${activeTab === tab ? "bg-brand-50 text-brand-500" : "text-muted hover:bg-brand-50"}`}
+              >
                 {tab}
               </button>
             ))}
           </div>
-          <PrimaryButton onClick={() => setView("upload")}>创建路线</PrimaryButton>
+          <PrimaryButton onClick={() => setView("landing")}>创建路线</PrimaryButton>
         </div>
-        <div className="grid gap-6 lg:grid-cols-4">
-          {routeCards.map((card) => (
+        {filteredCards.length === 0 ? (
+          <div className="rounded-3xl border border-line bg-white p-12 text-center shadow-soft">
+            <Library className="mx-auto h-10 w-10 text-brand-500" />
+            <h2 className="mt-4 text-3xl font-black">这里还没有路线</h2>
+            <p className="mt-3 text-muted">收藏几条路线后，它们会出现在这里。</p>
+          </div>
+        ) : (
+          <div className="grid gap-6 lg:grid-cols-3 xl:grid-cols-4">
+            {filteredCards.map((card) => (
             <article key={card.title} className="flex min-h-[520px] flex-col justify-between rounded-3xl border border-line bg-white p-8 shadow-soft">
               <div>
                 <h2 className="text-3xl font-black leading-tight">{card.title}</h2>
-                <p className="mt-24 text-xl text-muted">{card.author}</p>
-                <p className="mt-10 flex items-center gap-5 text-xl">
+                <p className="mt-8 min-h-24 text-lg leading-7 text-muted">{card.prompt}</p>
+                <p className="mt-8 text-xl text-muted">{card.author}</p>
+                <p className="mt-6 flex items-center gap-5 text-xl">
                   <span className="text-amber-500">★ {card.rating}</span>
                   <span className="text-muted">{card.learners} 人学习</span>
                 </p>
               </div>
               <div className="grid gap-3">
-                <OutlineButton onClick={() => onGenerate(card.title)}>查看路线</OutlineButton>
+                <OutlineButton onClick={() => onGenerate(card.prompt)}>生成这条路线</OutlineButton>
                 <div className="flex justify-between text-muted">
-                  <Heart className="h-6 w-6" />
-                  <GitFork className="h-6 w-6" />
-                  <Share2 className="h-6 w-6" />
+                  <button onClick={() => toggleFavorite(card.title)} title="收藏路线" className={favorites.includes(card.title) ? "text-rose-500" : "hover:text-rose-500"}>
+                    <Heart className="h-6 w-6" />
+                  </button>
+                  <button onClick={() => onGenerate(`Fork 并定制这条路线：${card.prompt}`)} title="Fork 路线" className="hover:text-brand-500">
+                    <GitFork className="h-6 w-6" />
+                  </button>
+                  <button onClick={() => void shareRoute(card)} title="复制分享" className="hover:text-brand-500">
+                    <Share2 className="h-6 w-6" />
+                  </button>
                 </div>
               </div>
             </article>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </Shell>
   );
 }
 
-function UniversePage({ setView }: { setView: (view: View) => void }) {
+function UniversePage({
+  currentRoute,
+  onOpenRoute,
+  onNewRoute,
+  notify,
+  setView
+}: {
+  currentRoute: MaopuRoute;
+  onOpenRoute: (route: MaopuRoute) => void;
+  onNewRoute: () => void;
+  notify: (message: string) => void;
+  setView: (view: View) => void;
+}) {
+  const [savedRoutes, setSavedRoutes] = useState<MaopuRoute[]>([]);
+
+  useEffect(() => {
+    setSavedRoutes(safeSavedRoutes());
+  }, []);
+
+  const routes = savedRoutes.length ? savedRoutes : currentRoute.nodes.length ? [currentRoute] : [];
+  const allNodes = routes.flatMap((item) => item.nodes);
+  const learnedCount = allNodes.filter((node) => node.status === "learned").length;
+  const projectCount = allNodes.reduce((total, node) => total + node.projects.length, 0);
+  const currentProgress = routes[0] ? calculateProgress(routes[0]) : 0;
+  const recentNodes = routes[0]?.nodes.filter((node) => node.status !== "unlearned").slice(0, 4) ?? [];
+
+  function deleteSavedRoute(route: MaopuRoute) {
+    const next = safeSavedRoutes().filter((item) => routeStorageId(item) !== routeStorageId(route) && item.title !== route.title);
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    setSavedRoutes(next);
+    notify("已删除本地路线");
+  }
+
   return (
     <Shell title="我的学习" setView={setView}>
       <div className="mx-auto grid max-w-[1440px] items-center gap-10 px-6 py-12 lg:grid-cols-[1fr_360px_1fr]">
         <div className="rounded-3xl border border-line bg-white p-9 shadow-soft">
-          <h2 className="text-3xl font-black">我的路线</h2>
-          {[
-            ["全栈工程师路线", "学习中", "32%", "bg-amber-100 text-amber-600"],
-            ["算法与数据结构", "学习中", "45%", "bg-pink-100 text-pink-600"],
-            ["AI 基础知识", "未开始", "0%", "bg-emerald-100 text-emerald-600"]
-          ].map(([title, status, progress, color]) => (
-            <div key={title} className="flex items-center gap-5 border-b border-line py-8">
-              <span className={`grid h-16 w-16 place-items-center rounded-2xl ${color}`}>
-                <Boxes className="h-8 w-8" />
-              </span>
-              <div className="flex-1">
-                <h3 className="text-2xl font-black">{title}</h3>
-                <p className="mt-2 text-lg text-muted">{status}</p>
-              </div>
-              <span className="font-bold text-brand-500">{progress}</span>
-              <ChevronRight className="h-6 w-6 text-muted" />
+          <div className="flex items-center justify-between gap-4">
+            <h2 className="text-3xl font-black">我的路线</h2>
+            <button onClick={onNewRoute} className="rounded-xl bg-brand-50 px-4 py-3 font-black text-brand-500">
+              新建
+            </button>
+          </div>
+          {routes.length === 0 ? (
+            <div className="mt-10 rounded-2xl border border-dashed border-brand-100 p-8 text-center">
+              <Boxes className="mx-auto h-10 w-10 text-brand-500" />
+              <h3 className="mt-4 text-2xl font-black">还没有保存路线</h3>
+              <p className="mt-2 text-muted">生成或手动创建路线后，会自动出现在这里。</p>
+              <PrimaryButton onClick={() => setView("landing")} className="mt-6">
+                去规划路线
+              </PrimaryButton>
             </div>
-          ))}
+          ) : (
+            routes.map((item, index) => {
+              const progress = calculateProgress(item);
+              const status = progress >= 100 ? "已完成" : progress > 0 ? "学习中" : "未开始";
+              const color = progress >= 100 ? "bg-emerald-100 text-emerald-600" : progress > 0 ? "bg-amber-100 text-amber-600" : "bg-brand-50 text-brand-500";
+              return (
+                <div key={`${item.title}-${index}`} className="flex items-center gap-5 border-b border-line py-8">
+                  <button onClick={() => onOpenRoute(item)} className={`grid h-16 w-16 place-items-center rounded-2xl ${color}`}>
+                    <Boxes className="h-8 w-8" />
+                  </button>
+                  <button onClick={() => onOpenRoute(item)} className="min-w-0 flex-1 text-left">
+                    <h3 className="truncate text-2xl font-black">{item.title}</h3>
+                    <p className="mt-2 text-lg text-muted">{status} · {item.nodes.length} 节点</p>
+                  </button>
+                  <span className="font-bold text-brand-500">{progress}%</span>
+                  <button onClick={() => deleteSavedRoute(item)} className="rounded-xl border border-line p-2 text-muted hover:text-rose-500" title="删除路线">
+                    <Trash2 className="h-5 w-5" />
+                  </button>
+                  <button onClick={() => onOpenRoute(item)} className="rounded-xl border border-line p-2 text-muted hover:text-brand-500" title="打开路线">
+                    <ChevronRight className="h-5 w-5" />
+                  </button>
+                </div>
+              );
+            })
+          )}
           <button onClick={() => setView("community")} className="mt-8 font-black text-brand-500">
-            查看全部路线 <ChevronRight className="inline h-5 w-5" />
+            查看社区路线 <ChevronRight className="inline h-5 w-5" />
           </button>
         </div>
         <div className="mascot-full min-h-[620px] rounded-[2rem]" />
@@ -1148,9 +1437,9 @@ function UniversePage({ setView }: { setView: (view: View) => void }) {
           <h2 className="text-3xl font-black">学习概览</h2>
           <div className="mt-9 grid grid-cols-3 gap-4 border-b border-line pb-9 text-center text-muted">
             {[
-              ["已学知识点", "48"],
-              ["学习时长", "126"],
-              ["完成项目", "6"]
+              ["已学知识点", String(learnedCount)],
+              ["保存路线", String(routes.length)],
+              ["项目建议", String(projectCount)]
             ].map(([label, value]) => (
               <div key={label}>
                 <p className="font-semibold">{label}</p>
@@ -1159,15 +1448,26 @@ function UniversePage({ setView }: { setView: (view: View) => void }) {
             ))}
           </div>
           <h3 className="mt-10 text-2xl font-black">最近学习</h3>
-          {["离散数学", "数据结构与算法", "计算机组成原理"].map((item, index) => (
-            <div key={item} className="mt-7 flex items-center justify-between text-xl text-muted">
-              <span className="flex items-center gap-3">
-                <BookOpen className="h-6 w-6 text-brand-500" />
-                {item}
-              </span>
-              <span>{index === 0 ? "2小时前" : index === 1 ? "昨天" : "2天前"}</span>
+          {recentNodes.length ? (
+            recentNodes.map((item, index) => (
+                <div key={item.id} className="mt-7 flex items-center justify-between text-xl text-muted">
+                  <span className="flex items-center gap-3">
+                    <BookOpen className="h-6 w-6 text-brand-500" />
+                    {item.title}
+                  </span>
+                  <span>{index === 0 ? "刚刚" : `${index + 1} 个节点前`}</span>
+                </div>
+              ))
+          ) : (
+            <p className="mt-7 leading-7 text-muted">还没有学习记录。打开一条路线，把节点状态改成“学习中”或“已学习”后，这里会更新。</p>
+          )}
+          <div className="mt-10 rounded-2xl bg-brand-50 p-5">
+            <p className="font-black text-brand-500">当前路线进度</p>
+            <div className="mt-4 h-3 overflow-hidden rounded-full bg-white">
+              <div className="h-full rounded-full bg-brand-500" style={{ width: `${currentProgress}%` }} />
             </div>
-          ))}
+            <p className="mt-3 text-sm font-bold text-muted">{currentProgress}%</p>
+          </div>
         </div>
       </div>
     </Shell>
@@ -1217,14 +1517,8 @@ export default function HomePage() {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem(STORAGE_KEY);
-    if (!saved) return;
-    try {
-      const routes = JSON.parse(saved) as MaopuRoute[];
-      if (routes[0]) setRoute(routes[0]);
-    } catch {
-      window.localStorage.removeItem(STORAGE_KEY);
-    }
+    const routes = safeSavedRoutes();
+    if (routes[0]) setRoute(routes[0]);
   }, []);
 
   function notify(message: string) {
@@ -1236,12 +1530,25 @@ export default function HomePage() {
   }
 
   function saveRoute(nextRoute = route) {
-    const saved = window.localStorage.getItem(STORAGE_KEY);
-    const routes = saved ? (JSON.parse(saved) as MaopuRoute[]) : [];
+    const routes = safeSavedRoutes();
     const nextId = routeStorageId(nextRoute);
     const withoutCurrent = routes.filter((item) => routeStorageId(item) !== nextId && item.title !== nextRoute.title);
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify([nextRoute, ...withoutCurrent].slice(0, 12)));
     notify("路线已保存到本地");
+  }
+
+  function importRoute(nextRoute: MaopuRoute) {
+    setRoute(nextRoute);
+    setSelectedNode(null);
+    saveRoute(nextRoute);
+    setView("map");
+  }
+
+  function openRoute(nextRoute: MaopuRoute) {
+    setRoute(nextRoute);
+    setSelectedNode(null);
+    setView("map");
+    notify("已打开路线");
   }
 
   function newRoute() {
@@ -1430,15 +1737,15 @@ export default function HomePage() {
   }
 
   if (view === "upload") {
-    return withToasts(<UploadPage onGenerate={generateRoute} setView={setView} />);
+    return withToasts(<UploadPage onGenerate={generateRoute} onImportRoute={importRoute} notify={notify} setView={setView} />);
   }
 
   if (view === "community") {
-    return withToasts(<CommunityPage onGenerate={generateRoute} setView={setView} />);
+    return withToasts(<CommunityPage onGenerate={generateRoute} notify={notify} setView={setView} />);
   }
 
   if (view === "universe") {
-    return withToasts(<UniversePage setView={setView} />);
+    return withToasts(<UniversePage currentRoute={route} onOpenRoute={openRoute} onNewRoute={newRoute} notify={notify} setView={setView} />);
   }
 
   return withToasts(
