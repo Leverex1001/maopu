@@ -69,6 +69,14 @@ type Toast = {
 
 type AssistantAction = "next" | "explain" | "resource" | "ask";
 
+type RecognitionResult = {
+  goal: string;
+  profile: string;
+  constraints: string[];
+  keywords: string[];
+  prompt: string;
+};
+
 const STORAGE_KEY = "maopu.savedRoutes.v1";
 
 const routeCards = [
@@ -88,6 +96,17 @@ const statusOptions: Array<{ value: LearningStatus; label: string }> = [
   { value: "learning", label: "学习中" },
   { value: "unlearned", label: "未学习" }
 ];
+
+function createBlankRoute(title = "我的自定义路线"): MaopuRoute {
+  return {
+    title,
+    description: "先描述目标、基础和约束，再由猫扑识别并规划路线；也可以从空白地图手动添加节点。",
+    summary: "这是一条空白路线，等待你添加目标、知识点和依赖关系。",
+    domains: defaultRoute.domains,
+    nodes: [],
+    edges: []
+  };
+}
 
 function cloneRoute(route: MaopuRoute): MaopuRoute {
   return JSON.parse(JSON.stringify(route)) as MaopuRoute;
@@ -247,16 +266,29 @@ function LandingPage({
   goal,
   setGoal,
   generating,
+  recognizing,
+  recognition,
+  onRecognize,
   onGenerate,
+  onNewRoute,
   setView
 }: {
   goal: string;
   setGoal: (goal: string) => void;
   generating: boolean;
+  recognizing: boolean;
+  recognition: RecognitionResult | null;
+  onRecognize: (input: string) => void;
   onGenerate: (goal: string) => void;
+  onNewRoute: () => void;
   setView: (view: View) => void;
 }) {
-  const examples = ["全栈工程师", "人工智能工程师", "数据科学家", "游戏开发者", "考研计算机"];
+  const starterPrompts = [
+    "我现在零基础，想三个月做出一个能展示的 Web 项目",
+    "我学过一点 Python，想转向 AI 应用开发",
+    "我准备计算机相关面试，需要补齐项目和基础",
+    "我有一份课程资料，想整理成可执行学习路线"
+  ];
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -285,85 +317,112 @@ function LandingPage({
       <section className="mx-auto grid max-w-[1440px] items-center gap-10 pb-12 pt-20 lg:grid-cols-[1.05fr_.95fr]">
         <div>
           <p className="mb-5 inline-flex items-center gap-2 rounded-full border border-brand-100 bg-white px-4 py-2 font-bold text-brand-500 shadow-soft">
-            <Sparkles className="h-5 w-5" />
-            知识结构可视化工具
+            <Compass className="h-5 w-5" />
+            路线规划工作台
           </p>
-          <h1 className="max-w-3xl text-5xl font-black leading-tight tracking-normal lg:text-7xl">学习之前，先看见地图。</h1>
+          <h1 className="max-w-3xl text-5xl font-black leading-tight tracking-normal lg:text-7xl">先识别你的目标，再规划路线。</h1>
           <p className="mt-6 max-w-2xl text-xl leading-9 text-muted">
-            用 AI 生成完整的学习路径，从第一性原理理解一门学科为什么存在，以及知识之间如何连接。
+            不从预设模板开始。你描述目标、基础、时间和资料，猫扑先识别学习需求，再生成一张属于你的知识地图。
           </p>
 
-          <form onSubmit={submit} className="mt-10 rounded-3xl border border-brand-100 bg-white p-4 shadow-soft">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
-              <label className="sr-only" htmlFor="goal">
-                学习目标
+          <form onSubmit={submit} className="mt-10 rounded-3xl border border-brand-100 bg-white p-5 shadow-soft">
+            <div className="flex flex-col gap-4">
+              <label className="flex items-center gap-2 text-lg font-black" htmlFor="goal">
+                <Sparkles className="h-5 w-5 text-brand-500" />
+                描述你的目标、基础或手头资料
               </label>
-              <input
+              <textarea
                 id="goal"
                 value={goal}
                 onChange={(event) => setGoal(event.target.value)}
-                className="min-h-16 flex-1 rounded-2xl border border-transparent px-5 text-xl font-semibold outline-none focus:border-brand-100"
-                placeholder="我想成为一名全栈工程师"
+                className="min-h-36 resize-y rounded-2xl border border-line px-5 py-4 text-lg font-semibold leading-8 outline-none focus:border-brand-500"
+                placeholder="例如：我会一点 HTML/CSS，想在 8 周内做出一个能放进简历的全栈项目；或者粘贴课程大纲、考试范围、岗位 JD..."
               />
-              <PrimaryButton type="submit" className="min-w-52">
-                {generating ? "正在生成..." : "生成知识地图"}
-              </PrimaryButton>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <OutlineButton type="button" onClick={() => onRecognize(goal)} disabled={recognizing || !goal.trim()} className="flex items-center justify-center gap-2 disabled:opacity-50">
+                  <Search className="h-5 w-5" />
+                  {recognizing ? "正在识别..." : "先识别需求"}
+                </OutlineButton>
+                <PrimaryButton type="submit" disabled={generating || !goal.trim()} className="flex min-w-56 items-center justify-center gap-2 disabled:opacity-60">
+                  <Send className="h-5 w-5" />
+                  {generating ? "正在规划..." : "生成专属路线"}
+                </PrimaryButton>
+                <OutlineButton type="button" onClick={onNewRoute} className="flex items-center justify-center gap-2">
+                  <Plus className="h-5 w-5" />
+                  空白地图
+                </OutlineButton>
+              </div>
             </div>
           </form>
 
           <div className="mt-7 flex flex-wrap gap-3">
-            {examples.map((example) => (
+            {starterPrompts.map((example) => (
               <button
                 key={example}
-                onClick={() => setGoal(`我想成为一名${example}`)}
-                className="rounded-xl border border-line bg-white px-5 py-3 font-bold text-ink transition hover:border-brand-500 hover:text-brand-500"
+                onClick={() => setGoal(example)}
+                className="rounded-xl border border-line bg-white px-4 py-3 text-left font-bold text-ink transition hover:border-brand-500 hover:text-brand-500"
               >
                 {example}
               </button>
             ))}
           </div>
+
+          {recognition && (
+            <div className="mt-7 rounded-3xl border border-brand-100 bg-white p-6 shadow-soft">
+              <div className="flex items-center justify-between gap-4">
+                <h2 className="text-2xl font-black">识别结果</h2>
+                <button onClick={() => onGenerate(recognition.prompt)} className="rounded-xl bg-brand-500 px-5 py-3 font-bold text-white">
+                  用它规划
+                </button>
+              </div>
+              <p className="mt-4 text-lg font-black text-brand-500">{recognition.goal}</p>
+              <p className="mt-3 leading-7 text-muted">{recognition.profile}</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {recognition.keywords.map((item) => (
+                  <span key={item} className="rounded-full bg-brand-50 px-3 py-2 text-sm font-bold text-brand-500">
+                    {item}
+                  </span>
+                ))}
+              </div>
+              <div className="mt-4 grid gap-2 text-sm font-bold text-muted">
+                {recognition.constraints.map((item) => (
+                  <div key={item} className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                    {item}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="relative min-h-[520px] overflow-hidden rounded-[2rem]">
           <div className="mascot-crop absolute inset-0 rounded-[2rem]" />
-          <div className="absolute bottom-8 left-8 rounded-2xl border border-brand-100 bg-white/86 p-5 shadow-soft backdrop-blur">
-            <p className="text-sm font-bold text-muted">示例路线</p>
-            <p className="mt-1 text-2xl font-black">全栈工程师知识地图</p>
+          <div className="absolute inset-x-8 bottom-8 rounded-2xl border border-brand-100 bg-white/88 p-5 shadow-soft backdrop-blur">
+            <p className="text-sm font-bold text-muted">路线从你的输入开始</p>
+            <p className="mt-1 text-2xl font-black">目标识别 → 节点规划 → 依赖地图</p>
+            <div className="mt-4 grid gap-3 text-sm font-bold text-muted">
+              {["识别目标和当前基础", "抽取关键能力和约束", "生成可编辑知识地图"].map((item) => (
+                <div key={item} className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-brand-500" />
+                  {item}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-[1440px] py-12">
-        <div className="mb-8 flex items-center justify-between">
-          <h2 className="text-3xl font-black">热门公开路线</h2>
-          <button onClick={() => setView("community")} className="font-bold text-brand-500">
-            查看全部 <ChevronRight className="inline h-5 w-5" />
-          </button>
-        </div>
-        <div className="grid gap-5 lg:grid-cols-4">
-          {routeCards.map((card) => (
-            <button
-              key={card.title}
-              onClick={() => onGenerate(card.title)}
-              className="min-h-64 rounded-2xl border border-line bg-white p-7 text-left shadow-soft transition hover:-translate-y-1 hover:border-brand-500"
-            >
-              <h3 className="text-2xl font-black">{card.title}</h3>
-              <p className="mt-14 text-lg text-muted">{card.author}</p>
-              <p className="mt-8 flex items-center gap-5 text-lg">
-                <span className="text-amber-500">★ {card.rating}</span>
-                <span className="text-muted">{card.learners} 人学习</span>
-              </p>
-            </button>
-          ))}
-        </div>
-      </section>
-
       <section className="mx-auto grid max-w-[1440px] gap-5 pb-16 lg:grid-cols-3">
-        {["为什么会有操作系统？", "为什么会有数据库？", "为什么会有微积分？"].map((question) => (
-          <div key={question} className="rounded-2xl border border-line bg-white p-7 shadow-soft">
-            <BookOpen className="mb-6 h-8 w-8 text-brand-500" />
-            <h3 className="text-2xl font-black">{question}</h3>
-            <p className="mt-4 leading-7 text-muted">猫扑从问题和历史出发，帮你先理解知识存在的理由，再进入细节学习。</p>
+        {[
+          { title: "目标识别", text: "把零散想法、岗位 JD、课程大纲整理成清晰学习目标。", Icon: Search },
+          { title: "路线规划", text: "生成知识节点、前置关系、学习路径、项目和资源。", Icon: MapIcon },
+          { title: "手动编辑", text: "路线不是一次性答案，你可以继续添加、删除、调整节点。", Icon: Pencil }
+        ].map(({ title, text, Icon }) => (
+          <div key={title} className="rounded-2xl border border-line bg-white p-7 shadow-soft">
+            <Icon className="mb-6 h-8 w-8 text-brand-500" />
+            <h3 className="text-2xl font-black">{title}</h3>
+            <p className="mt-4 leading-7 text-muted">{text}</p>
           </div>
         ))}
       </section>
@@ -937,6 +996,23 @@ function MapPage({
               <span className="rounded-full bg-brand-50 px-3 py-2 text-brand-500">{route.nodes.length} 节点</span>
             </div>
           </div>
+          {route.nodes.length === 0 && (
+            <div className="absolute left-1/2 top-1/2 z-20 w-[min(520px,calc(100%-48px))] -translate-x-1/2 -translate-y-1/2 rounded-3xl border border-brand-100 bg-white/94 p-8 text-center shadow-panel backdrop-blur">
+              <Compass className="mx-auto h-10 w-10 text-brand-500" />
+              <h2 className="mt-4 text-3xl font-black">从空白路线开始</h2>
+              <p className="mt-3 leading-7 text-muted">你可以手动添加第一个知识点，也可以回到首页描述目标，让猫扑识别并规划整条路线。</p>
+              <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+                <PrimaryButton onClick={onAddNode} className="flex items-center justify-center gap-2">
+                  <Plus className="h-5 w-5" />
+                  添加节点
+                </PrimaryButton>
+                <OutlineButton onClick={() => setView("landing")} className="flex items-center justify-center gap-2">
+                  <Sparkles className="h-5 w-5" />
+                  识别目标
+                </OutlineButton>
+              </div>
+            </div>
+          )}
           <ReactFlowProvider>
             <MapCanvas route={route} selectedNodeId={selectedNode?.id ?? null} onSelect={setSelectedNode} onMoveNode={onMoveNode} />
           </ReactFlowProvider>
@@ -1132,10 +1208,12 @@ function Shell({ title, children, setView }: { title: string; children: React.Re
 
 export default function HomePage() {
   const [view, setView] = useState<View>("landing");
-  const [goal, setGoal] = useState("我想成为一名全栈工程师");
-  const [route, setRoute] = useState<MaopuRoute>(defaultRoute);
+  const [goal, setGoal] = useState("");
+  const [route, setRoute] = useState<MaopuRoute>(() => createBlankRoute());
   const [selectedNode, setSelectedNode] = useState<KnowledgeNode | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [recognizing, setRecognizing] = useState(false);
+  const [recognition, setRecognition] = useState<RecognitionResult | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   useEffect(() => {
@@ -1167,11 +1245,7 @@ export default function HomePage() {
   }
 
   function newRoute() {
-    const next = cloneRoute(defaultRoute);
-    next.title = "未命名知识路线";
-    next.description = "从这里开始设计一条新的知识地图。";
-    next.nodes = [];
-    next.edges = [];
+    const next = createBlankRoute("未命名知识路线");
     setRoute(next);
     setSelectedNode(null);
     setView("map");
@@ -1231,6 +1305,11 @@ export default function HomePage() {
   }
 
   function exportRoute(kind: "markdown" | "json" | "svg") {
+    if (route.nodes.length === 0) {
+      notify("空白路线还没有可导出的节点");
+      return;
+    }
+
     if (kind === "markdown") {
       downloadText(routeFilename(route, "md"), routeToMarkdown(route), "text/markdown;charset=utf-8");
     }
@@ -1267,7 +1346,13 @@ export default function HomePage() {
   }
 
   async function generateRoute(nextGoal: string) {
-    setGoal(nextGoal);
+    const plannedGoal = nextGoal.trim();
+    if (!plannedGoal) {
+      notify("先描述你的学习目标或资料");
+      return;
+    }
+
+    setGoal(plannedGoal);
     setGenerating(true);
     setSelectedNode(null);
 
@@ -1275,14 +1360,14 @@ export default function HomePage() {
       const response = await fetch("/api/generate-route", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ goal: nextGoal })
+        body: JSON.stringify({ goal: plannedGoal })
       });
       if (!response.ok) throw new Error("Route generation failed");
       const data = (await response.json()) as MaopuRoute;
       setRoute(data);
       saveRoute(data);
     } catch {
-      const fallback = routeForGoal(nextGoal);
+      const fallback = routeForGoal(plannedGoal);
       setRoute(fallback);
       saveRoute(fallback);
     } finally {
@@ -1290,6 +1375,39 @@ export default function HomePage() {
         setGenerating(false);
         setView("map");
       }, 260);
+    }
+  }
+
+  async function recognizeRoute(input: string) {
+    const text = input.trim();
+    if (!text) {
+      notify("先写下你的目标、基础或资料");
+      return;
+    }
+
+    setRecognizing(true);
+    try {
+      const response = await fetch("/api/recognize-route", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ input: text })
+      });
+      if (!response.ok) throw new Error("Recognition failed");
+      const data = (await response.json()) as RecognitionResult;
+      setRecognition(data);
+      setGoal(data.prompt);
+      notify("已识别学习需求");
+    } catch {
+      setRecognition({
+        goal: text.length <= 28 ? text : "围绕你的描述规划学习路线",
+        profile: "当前基础未明确，需要先识别前置知识并逐步推进。",
+        constraints: ["路线需要从目标倒推，兼顾概念、练习和项目"],
+        keywords: ["基础", "核心概念", "项目练习", "路线规划"],
+        prompt: text
+      });
+      notify("已使用本地规则识别");
+    } finally {
+      setRecognizing(false);
     }
   }
 
@@ -1323,5 +1441,17 @@ export default function HomePage() {
     return withToasts(<UniversePage setView={setView} />);
   }
 
-  return withToasts(<LandingPage goal={goal} setGoal={setGoal} generating={generating} onGenerate={generateRoute} setView={setView} />);
+  return withToasts(
+    <LandingPage
+      goal={goal}
+      setGoal={setGoal}
+      generating={generating}
+      recognizing={recognizing}
+      recognition={recognition}
+      onRecognize={recognizeRoute}
+      onGenerate={generateRoute}
+      onNewRoute={newRoute}
+      setView={setView}
+    />
+  );
 }
