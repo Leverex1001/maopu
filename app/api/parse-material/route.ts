@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -167,6 +169,7 @@ async function parseUrl(url: string): Promise<ParseMaterialResponse> {
     return parseGithubRepository(github.owner, github.repo);
   }
 
+  await assertPublicHttpUrl(url);
   const response = await fetch(url, {
     headers: { "User-Agent": "maopu-material-parser" },
     signal: AbortSignal.timeout(15000)
@@ -193,6 +196,77 @@ async function parseUrl(url: string): Promise<ParseMaterialResponse> {
     summary: summarizeText(text, "网页"),
     meta: { url }
   };
+}
+
+async function assertPublicHttpUrl(rawUrl: string) {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    throw new MaterialParseError("链接格式不正确，请使用完整的 http 或 https 地址。", 400);
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new MaterialParseError("只支持解析 http 或 https 链接。", 400);
+  }
+
+  if (parsed.username || parsed.password) {
+    throw new MaterialParseError("链接中不能包含用户名或密码。", 400);
+  }
+
+  const hostname = parsed.hostname.toLowerCase().replace(/^\[(.*)\]$/, "$1");
+  if (isBlockedHostname(hostname)) {
+    throw new MaterialParseError("为保护部署环境，不能解析本机或内网地址。", 400);
+  }
+
+  if (isIP(hostname)) return;
+
+  let addresses: Array<{ address: string }>;
+  try {
+    addresses = await lookup(hostname, { all: true, verbatim: true });
+  } catch {
+    throw new MaterialParseError("无法解析该链接域名，请检查地址是否可访问。", 400);
+  }
+
+  if (addresses.length === 0 || addresses.some(({ address }) => isBlockedIp(address))) {
+    throw new MaterialParseError("为保护部署环境，不能解析指向内网的链接。", 400);
+  }
+}
+
+function isBlockedHostname(hostname: string) {
+  return hostname === "localhost" || hostname.endsWith(".localhost") || isBlockedIp(hostname);
+}
+
+function isBlockedIp(address: string) {
+  const version = isIP(address);
+  if (version === 4) return isBlockedIpv4(address);
+  if (version === 6) return isBlockedIpv6(address);
+  return false;
+}
+
+function isBlockedIpv4(address: string) {
+  const parts = address.split(".").map((part) => Number.parseInt(part, 10));
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return true;
+  const [a, b] = parts;
+  return (
+    a === 0 ||
+    a === 10 ||
+    a === 127 ||
+    a >= 224 ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168)
+  );
+}
+
+function isBlockedIpv6(address: string) {
+  const normalized = address.toLowerCase();
+  if (normalized === "::1" || normalized === "::" || normalized.startsWith("fe80:") || normalized.startsWith("fc") || normalized.startsWith("fd")) {
+    return true;
+  }
+  if (!normalized.startsWith("::ffff:")) return false;
+  return isBlockedIpv4(normalized.replace("::ffff:", ""));
 }
 
 function assertFileSize(file: File) {

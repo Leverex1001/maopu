@@ -159,6 +159,7 @@
 
 - PDF、XLSX 和 GitHub README/目录已经有第一版解析；旧版 `.xls` 请先另存为 `.xlsx`、CSV 或 TSV。
 - 资料上传默认限制单文件 8MB，普通网页抓取默认限制 2MB，粘贴文本默认限制 1MB，可用 `MATERIAL_MAX_FILE_MB`、`MATERIAL_MAX_URL_MB`、`MATERIAL_MAX_TEXT_MB` 调整。
+- 普通网页链接只允许公网 `http/https` 地址，服务端会拒绝 localhost、内网、链路本地和携带账号密码的 URL，降低公开部署时的 SSRF 风险。
 - 图片 OCR 和截图识别还没有实现。
 
 ### 工程化
