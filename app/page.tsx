@@ -199,12 +199,12 @@ const statusOptions: Array<{ value: LearningStatus; label: string }> = [
 ];
 
 const mascotStyles: Array<{ value: MascotVariant; label: string; description: string; avatar: string }> = [
-  { value: "planner", label: "精神", description: "挥手上线，适合开始规划", avatar: "/maopu-images/mascot-avatar-planner.png" },
-  { value: "coder", label: "学习", description: "伏案学习，适合拆解路线", avatar: "/maopu-images/mascot-avatar-coder.png" },
-  { value: "idea", label: "灵感", description: "想到办法，适合生成方案", avatar: "/maopu-images/mascot-avatar-idea.png" },
-  { value: "thinking", label: "思考", description: "认真判断，适合分析取舍", avatar: "/maopu-images/mascot-avatar-thinking.png" },
-  { value: "sleepy", label: "困困", description: "打哈欠，适合慢慢陪学", avatar: "/maopu-images/mascot-avatar-sleepy.png" },
-  { value: "happy", label: "开心", description: "挥手鼓励，适合完成节点", avatar: "/maopu-images/mascot-avatar-happy.png" }
+  { value: "planner", label: "导图", description: "路线导航皮肤，适合开始规划", avatar: "/maopu-images/skin-avatar-planner.png" },
+  { value: "coder", label: "智算", description: "AI 智能助教皮肤，适合拆解任务", avatar: "/maopu-images/skin-avatar-coder.png" },
+  { value: "idea", label: "研修", description: "研究记录皮肤，适合整理资料", avatar: "/maopu-images/skin-avatar-idea.png" },
+  { value: "thinking", label: "读书", description: "阅读学习皮肤，适合分析取舍", avatar: "/maopu-images/skin-avatar-thinking.png" },
+  { value: "sleepy", label: "抱枕", description: "休息陪学皮肤，适合慢慢复盘", avatar: "/maopu-images/skin-avatar-sleepy.png" },
+  { value: "happy", label: "冲刺", description: "打卡冲刺皮肤，适合完成节点后鼓励", avatar: "/maopu-images/skin-avatar-happy.png" }
 ];
 
 const SUPABASE_SCHEMA_SQL = `create table public.routes (
@@ -715,14 +715,14 @@ function MascotStyleSwitch({
   compact?: boolean;
 }) {
   return (
-    <div className={`flex flex-wrap gap-2 ${compact ? "text-xs" : "text-sm"}`} aria-label="切换小扑状态">
+    <div className={`${compact ? "flex flex-wrap gap-2 text-xs" : "soft-scrollbar flex gap-1.5 overflow-x-auto pb-1 text-xs"}`} aria-label="切换小扑皮肤">
       {mascotStyles.map((style) => (
         <button
           key={style.value}
           type="button"
           onClick={() => onChange(style.value)}
           title={style.description}
-          className={`flex items-center gap-2 rounded-full border font-black transition ${compact ? "px-2 py-1.5" : "px-3 py-2"} ${
+          className={`flex shrink-0 items-center gap-1 border font-black transition ${compact ? "rounded-full px-2 py-1.5" : "rounded-2xl px-1.5 py-1.5"} ${
             variant === style.value ? "border-brand-500 bg-brand-50 text-brand-500" : "border-line bg-white text-muted hover:border-brand-500 hover:text-brand-500"
           }`}
         >
@@ -747,52 +747,52 @@ const mascotStageImages: Record<MascotVariant, {
   cues: string[];
 }> = {
   planner: {
-    main: "/maopu-images/mascot-planner.png",
-    avatar: "/maopu-images/mascot-avatar-planner.png",
-    mainAlt: "猫小扑挥手精神状态",
-    mainClass: "right-[-5%] h-[92%]",
-    note: "精神上线，先把目标拆成能走的路线。",
-    cues: ["轻呼吸", "挥手摆动", "状态同步"]
+    main: "/maopu-images/skin-planner.png",
+    avatar: "/maopu-images/skin-avatar-planner.png",
+    mainAlt: "小扑导图导航皮肤",
+    mainClass: "h-[95%] max-w-[84%]",
+    note: "导图模式，适合把目标拆成能走的路线。",
+    cues: ["规划", "知识图", "路线"]
   },
   coder: {
-    main: "/maopu-images/mascot-study-desk.png",
-    avatar: "/maopu-images/mascot-avatar-coder.png",
-    mainAlt: "猫小扑桌前学习状态",
-    mainClass: "right-[-8%] h-[88%]",
-    note: "进入学习模式，陪你把节点和依赖关系写清楚。",
-    cues: ["伏案微动", "笔记节奏", "专注视线"]
+    main: "/maopu-images/skin-coder.png",
+    avatar: "/maopu-images/skin-avatar-coder.png",
+    mainAlt: "小扑智算助教皮肤",
+    mainClass: "h-[95%] max-w-[78%]",
+    note: "智算模式，适合把节点和依赖关系写清楚。",
+    cues: ["AI", "拆解", "助教"]
   },
   idea: {
-    main: "/maopu-images/mascot-idea.png",
-    avatar: "/maopu-images/mascot-avatar-idea.png",
-    mainAlt: "猫小扑灵感状态",
-    mainClass: "right-[-6%] h-[92%]",
-    note: "灵感弹出，适合把模糊想法变成路线草案。",
-    cues: ["上浮提示", "亮点闪烁", "轻快弹入"]
+    main: "/maopu-images/skin-idea.png",
+    avatar: "/maopu-images/skin-avatar-idea.png",
+    mainAlt: "小扑研修记录皮肤",
+    mainClass: "h-[95%] max-w-[78%]",
+    note: "研修模式，适合把资料和笔记整理成结构。",
+    cues: ["资料", "记录", "整理"]
   },
   thinking: {
-    main: "/maopu-images/mascot-thinking.png",
-    avatar: "/maopu-images/mascot-avatar-thinking.png",
-    mainAlt: "猫小扑思考状态",
-    mainClass: "right-[-5%] h-[92%]",
-    note: "认真思考，帮你判断前置知识和学习顺序。",
-    cues: ["慢速摇摆", "疑问停顿", "稳定呼吸"]
+    main: "/maopu-images/skin-thinking.png",
+    avatar: "/maopu-images/skin-avatar-thinking.png",
+    mainAlt: "小扑读书学习皮肤",
+    mainClass: "h-[95%] max-w-[74%]",
+    note: "读书模式，适合判断前置知识和学习顺序。",
+    cues: ["阅读", "分析", "顺序"]
   },
   sleepy: {
-    main: "/maopu-images/mascot-sleepy.png",
-    avatar: "/maopu-images/mascot-avatar-sleepy.png",
-    mainAlt: "猫小扑困困打哈欠状态",
-    mainClass: "right-[-7%] h-[92%]",
-    note: "困困陪学，节奏放慢但不会把你丢下。",
-    cues: ["慢点头", "轻摇头", "睡意漂浮"]
+    main: "/maopu-images/skin-sleepy.png",
+    avatar: "/maopu-images/skin-avatar-sleepy.png",
+    mainAlt: "小扑抱枕休息皮肤",
+    mainClass: "h-[92%] max-w-[94%]",
+    note: "抱枕模式，适合放慢节奏继续复盘。",
+    cues: ["复盘", "慢学", "休息"]
   },
   happy: {
-    main: "/maopu-images/mascot-happy.png",
-    avatar: "/maopu-images/mascot-avatar-happy.png",
-    mainAlt: "猫小扑开心鼓励状态",
-    mainClass: "right-[-6%] h-[92%]",
-    note: "完成一个节点后，小扑切到开心鼓励状态。",
-    cues: ["挥手回弹", "轻快漂浮", "完成反馈"]
+    main: "/maopu-images/skin-happy.png",
+    avatar: "/maopu-images/skin-avatar-happy.png",
+    mainAlt: "小扑冲刺打卡皮肤",
+    mainClass: "h-[95%] max-w-[80%]",
+    note: "冲刺模式，适合完成一个节点后的打卡鼓励。",
+    cues: ["打卡", "冲刺", "完成"]
   }
 };
 
@@ -810,36 +810,42 @@ function MascotStage({ variant, onChange }: { variant: MascotVariant; onChange: 
   const imgs = mascotStageImages[variant];
 
   return (
-    <div className={`mascot-stage mascot-stage-${variant} relative min-h-[580px] overflow-hidden rounded-[2rem] border border-brand-100 bg-white shadow-soft`}>
-      <div className="absolute left-6 top-6 z-30 max-w-[340px] rounded-2xl border border-brand-100 bg-white/90 p-4 shadow-soft backdrop-blur">
-        <p className="text-sm font-bold text-muted">小扑状态</p>
-        <MascotStyleSwitch variant={variant} onChange={onChange} compact />
+    <div className="overflow-hidden rounded-[2rem] border border-brand-100 bg-white shadow-soft">
+      <div className={`mascot-stage mascot-stage-${variant} relative min-h-[600px] overflow-hidden`}>
+        <div className="absolute left-6 top-6 z-20 rounded-2xl border border-brand-100 bg-white/85 px-4 py-3 shadow-soft backdrop-blur">
+          <p className="text-xs font-black text-muted">当前皮肤</p>
+          <p className="mt-1 text-xl font-black text-brand-500">{mascotStyles.find((style) => style.value === variant)?.label ?? "小扑"}</p>
+        </div>
+
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={`main-${variant}`}
+            className={`absolute inset-x-0 bottom-0 z-10 mx-auto flex items-end justify-center ${imgs.mainClass}`}
+            initial={{ opacity: 0, scale: 0.96, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.97, y: 6 }}
+            transition={{ duration: 0.38, ease: "easeOut" }}
+          >
+            <img src={imgs.main} alt={imgs.mainAlt} className={`mascot-live mascot-live-${variant} h-full max-w-full object-contain object-bottom`} />
+          </motion.div>
+        </AnimatePresence>
       </div>
 
-      <AnimatePresence mode="wait">
-        <motion.img
-          key={`main-${variant}`}
-          src={imgs.main}
-          alt={imgs.mainAlt}
-          className={`mascot-live mascot-live-${variant} absolute bottom-0 max-w-none object-contain object-bottom z-10 ${imgs.mainClass}`}
-          initial={{ opacity: 0, scale: 0.96, y: 10 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.97, y: 6 }}
-          transition={{ duration: 0.38, ease: "easeOut" }}
-        />
-      </AnimatePresence>
-
-      <div className="absolute bottom-6 left-6 z-20 max-w-[430px] rounded-2xl border border-brand-100 bg-white/90 p-5 shadow-soft backdrop-blur">
-        <p className="text-sm font-bold text-muted">路线从你的输入开始</p>
-        <p className="mt-1 text-xl font-black">{imgs.note}</p>
-        <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm font-bold text-muted">
-          {imgs.cues.map((item) => (
-            <div key={item} className="flex items-center gap-1.5">
-              <CheckCircle2 className="h-4 w-4 shrink-0 text-brand-500" />
-              {item}
-            </div>
-          ))}
+      <div className="border-t border-brand-100 bg-white/95 p-4 sm:p-5">
+        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-sm font-bold text-muted">助手皮肤</p>
+            <p className="mt-1 text-lg font-black">{imgs.note}</p>
+          </div>
+          <div className="flex flex-wrap gap-2 text-xs font-bold text-muted">
+            {imgs.cues.map((item) => (
+              <span key={item} className="rounded-full bg-brand-50 px-3 py-1.5 text-brand-500">
+                {item}
+              </span>
+            ))}
+          </div>
         </div>
+        <MascotStyleSwitch variant={variant} onChange={onChange} />
       </div>
     </div>
   );
@@ -1450,7 +1456,7 @@ function Assistant({
               你现在正在看：{target}。我会先帮你理解它为什么存在，再推荐下一步。
             </div>
             <div className="mt-4 rounded-2xl border border-line bg-white p-3">
-              <p className="mb-2 text-xs font-black text-muted">切换小扑状态</p>
+              <p className="mb-2 text-xs font-black text-muted">切换助手皮肤</p>
               <MascotStyleSwitch variant={mascotVariant} onChange={onMascotVariantChange} compact />
             </div>
             <div className="mt-4 min-h-32 rounded-2xl border border-line p-5 font-semibold leading-7 text-ink">
@@ -2921,7 +2927,7 @@ export default function HomePage() {
   function updateMascotVariant(nextVariant: MascotVariant) {
     setMascotVariant(nextVariant);
     window.localStorage.setItem(MASCOT_STYLE_KEY, nextVariant);
-    notify(`已切换小扑状态：${mascotStyles.find((style) => style.value === nextVariant)?.label ?? "小扑"}`);
+    notify(`已切换小扑皮肤：${mascotStyles.find((style) => style.value === nextVariant)?.label ?? "小扑"}`);
   }
 
   function notify(message: string) {
