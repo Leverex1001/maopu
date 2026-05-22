@@ -558,8 +558,22 @@ function LandingPage({
           <button onClick={() => setView("universe")} className="hover:text-brand-500">
             我的学习
           </button>
-          <Search className="h-7 w-7" />
-          <CircleUserRound className="h-10 w-10 text-brand-500" />
+          <button
+            type="button"
+            onClick={() => document.getElementById("goal")?.focus()}
+            className="rounded-full p-2 transition hover:bg-brand-50 hover:text-brand-500"
+            aria-label="聚焦目标输入"
+          >
+            <Search className="h-7 w-7" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setView("universe")}
+            className="rounded-full p-1 text-brand-500 transition hover:bg-brand-50"
+            aria-label="打开我的学习"
+          >
+            <CircleUserRound className="h-10 w-10" />
+          </button>
         </nav>
       </header>
 
