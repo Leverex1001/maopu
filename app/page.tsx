@@ -1366,7 +1366,7 @@ function MapPage({
               </div>
             )}
           </div>
-          <button onClick={() => setView("universe")} className="rounded-xl border border-line p-3">
+          <button onClick={() => setView("universe")} className="rounded-xl border border-line p-3" aria-label="打开我的学习">
             <CircleUserRound className="h-6 w-6 text-brand-500" />
           </button>
         </div>
