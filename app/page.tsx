@@ -75,6 +75,7 @@ type Toast = {
 
 type AssistantAction = "next" | "explain" | "resource" | "ask";
 type MascotVariant = "planner" | "coder" | "idea" | "thinking" | "sleepy" | "happy";
+type AuthMode = "login" | "register";
 
 type RecognitionResult = {
   goal: string;
@@ -1951,12 +1952,36 @@ ${card.builtinRoute.description}
   );
 }
 
-function AccountSyncPanel({ routeCount }: { routeCount: number }) {
+function AccountSyncPanel({ routeCount, notify }: { routeCount: number; notify: (message: string) => void }) {
+  const [authMode, setAuthMode] = useState<AuthMode>("login");
+  const [authDraft, setAuthDraft] = useState({ name: "", email: "", password: "" });
+  const supabaseReady = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY);
   const authTasks = [
     { icon: KeyRound, title: "登录 / 注册", text: "接入 Supabase Auth 或 Auth.js 后启用邮箱、OAuth 和会话保持。" },
     { icon: ShieldCheck, title: "权限保护", text: "路线、收藏和学习记录按用户隔离，公开路线再单独发布。" },
     { icon: LockKeyhole, title: "云端同步", text: "把本地路线迁移到数据库，并用短分享链接替代压缩 hash。" }
   ];
+
+  function updateAuthDraft(field: keyof typeof authDraft, value: string) {
+    setAuthDraft((current) => ({ ...current, [field]: value }));
+  }
+
+  function submitAuthPreview(event: FormEvent) {
+    event.preventDefault();
+    if (!authDraft.email.trim() || !authDraft.password.trim()) {
+      notify("请先填写邮箱和密码");
+      return;
+    }
+    if (authMode === "register" && !authDraft.name.trim()) {
+      notify("注册时需要填写昵称");
+      return;
+    }
+    if (authDraft.password.length < 6) {
+      notify("密码至少 6 位");
+      return;
+    }
+    notify(supabaseReady ? "登录表单已就绪，下一步接 Supabase 服务端动作" : "登录表单已就绪，请先配置 Supabase 环境变量");
+  }
 
   return (
     <section className="rounded-3xl border border-brand-100 bg-white p-6 shadow-soft sm:p-9">
@@ -1965,11 +1990,68 @@ function AccountSyncPanel({ routeCount }: { routeCount: number }) {
           <p className="text-sm font-black text-brand-500">账号体系预留</p>
           <h2 className="mt-2 text-3xl font-black">登录后同步学习地图</h2>
         </div>
-        <span className="rounded-full bg-amber-50 px-3 py-2 text-sm font-black text-amber-700">待接入</span>
+        <span className={`rounded-full px-3 py-2 text-sm font-black ${supabaseReady ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+          {supabaseReady ? "环境已配置" : "待接入"}
+        </span>
       </div>
       <p className="mt-4 leading-7 text-muted">
         当前有 {routeCount} 条路线在本地浏览器里。下一步接入开源认证模块后，可以迁移到云端，支持换设备继续学习。
       </p>
+      <form onSubmit={submitAuthPreview} className="mt-6 rounded-2xl border border-line bg-brand-50/30 p-4">
+        <div className="grid grid-cols-2 gap-2 rounded-xl bg-white p-1">
+          {[
+            ["login", "登录"],
+            ["register", "注册"]
+          ].map(([mode, label]) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => setAuthMode(mode as AuthMode)}
+              className={`rounded-lg px-4 py-2 font-black transition ${authMode === mode ? "bg-brand-500 text-white" : "text-muted hover:bg-brand-50 hover:text-brand-500"}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {authMode === "register" && (
+          <label className="mt-4 block">
+            <span className="text-sm font-black">昵称</span>
+            <input
+              value={authDraft.name}
+              onChange={(event) => updateAuthDraft("name", event.target.value)}
+              className="mt-2 w-full rounded-xl border border-line bg-white px-4 py-3 font-semibold outline-none focus:border-brand-500"
+              placeholder="猫扑学习者"
+            />
+          </label>
+        )}
+        <label className="mt-4 block">
+          <span className="text-sm font-black">邮箱</span>
+          <input
+            type="email"
+            value={authDraft.email}
+            onChange={(event) => updateAuthDraft("email", event.target.value)}
+            className="mt-2 w-full rounded-xl border border-line bg-white px-4 py-3 font-semibold outline-none focus:border-brand-500"
+            placeholder="you@example.com"
+          />
+        </label>
+        <label className="mt-4 block">
+          <span className="text-sm font-black">密码</span>
+          <input
+            type="password"
+            value={authDraft.password}
+            onChange={(event) => updateAuthDraft("password", event.target.value)}
+            className="mt-2 w-full rounded-xl border border-line bg-white px-4 py-3 font-semibold outline-none focus:border-brand-500"
+            placeholder="至少 6 位"
+          />
+        </label>
+        <button type="submit" className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-brand-500 px-5 py-3 font-black text-white transition hover:bg-brand-600">
+          <KeyRound className="h-5 w-5" />
+          {authMode === "login" ? "登录并同步" : "创建账号"}
+        </button>
+        <p className="mt-3 text-sm font-semibold leading-6 text-muted">
+          这是 Supabase/Auth.js 接入前的前端表单，不会保存密码；配置服务端动作后即可替换提交逻辑。
+        </p>
+      </form>
       <div className="mt-6 grid gap-3">
         {authTasks.map(({ icon: Icon, title, text }) => (
           <div key={title} className="flex gap-4 rounded-2xl border border-line bg-white p-4">
@@ -1983,24 +2065,13 @@ function AccountSyncPanel({ routeCount }: { routeCount: number }) {
           </div>
         ))}
       </div>
-      <div className="mt-6 grid gap-3 sm:grid-cols-2">
-        <button
-          type="button"
-          disabled
-          className="rounded-xl bg-brand-100 px-5 py-3 font-black text-brand-500 opacity-70"
-          title="接入 Supabase Auth 后启用"
-        >
-          登录 / 注册
-        </button>
-        <button
-          type="button"
-          disabled
-          className="rounded-xl border border-line bg-white px-5 py-3 font-black text-muted opacity-70"
-          title="接入数据库后启用"
-        >
-          迁移本地路线
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={() => notify("本地路线迁移需要先创建 routes 数据表")}
+        className="mt-6 w-full rounded-xl border border-line bg-white px-5 py-3 font-black text-muted transition hover:border-brand-500 hover:text-brand-500"
+      >
+        迁移本地路线
+      </button>
     </section>
   );
 }
@@ -2087,7 +2158,7 @@ function UniversePage({
           </button>
         </div>
         <div className="grid gap-6">
-          <AccountSyncPanel routeCount={routes.length} />
+          <AccountSyncPanel routeCount={routes.length} notify={notify} />
           <div className="rounded-3xl border border-line bg-white p-6 shadow-soft sm:p-9">
             <h2 className="text-3xl font-black">学习概览</h2>
             <div className="mt-8 grid grid-cols-3 gap-3 border-b border-line pb-8 text-center text-muted sm:mt-9 sm:gap-4 sm:pb-9">

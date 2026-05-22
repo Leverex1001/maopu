@@ -49,6 +49,7 @@
 - 空白地图状态会隐藏路线体检浮层，只保留空状态引导，避免弹窗后方文字穿模。
 - 视图切换会自动回到页面顶部，避免从首页生成路线后地图页继承旧滚动位置导致画布半屏或黑屏。
 - 我的学习页新增账号与云同步入口，预留登录/注册、权限保护和本地路线迁移的产品位置。
+- 账号入口已有可交互登录/注册表单，会检查邮箱、密码和 Supabase 公开环境变量是否配置；当前不会保存密码，等待服务端认证动作接入。
 
 ### 小扑助手
 
@@ -136,7 +137,7 @@
 - 分享功能已可打开同一张路线，但还不是数据库短链接。
 - 社区页还是内置路线数据，不是真正的用户发布社区。
 - 收藏、学习记录和路线保存目前都在浏览器本地，清缓存或换设备会丢失。
-- 账号与云同步目前只有入口 UI，真实登录注册需要接入 Supabase Auth 或 Auth.js。
+- 账号与云同步目前已有前端表单和产品入口，真实登录注册需要接入 Supabase Auth 或 Auth.js 的服务端动作。
 
 ### AI 能力
 
@@ -165,6 +166,55 @@
 - **Supabase Auth + Next.js App Router**：官方 quickstart 已提供 cookie-based auth、TypeScript、Tailwind 的 `with-supabase` 模板，适合同时补登录、云端路线保存和 RLS 权限。
 - **Auth.js / NextAuth**：适合只想先做 OAuth、邮箱登录和 session，不急着绑定 Supabase 数据层的路线。
 - **login-register-supabase**：GitHub 上有 Next.js 15 + React 19 + Supabase 的登录注册样板，可参考目录结构和 AuthContext，但正式接入建议按本项目现有 App Router 结构重写，而不是整仓复制。
+
+### Supabase 接入草案
+
+建议先接 Supabase，因为它能同时解决登录、数据库、RLS 和短分享链接。
+
+前端公开环境变量：
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_your-key
+```
+
+建议的数据表：
+
+```sql
+create table public.routes (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid references auth.users(id) on delete cascade,
+  title text not null,
+  description text not null default '',
+  summary text not null default '',
+  route jsonb not null,
+  visibility text not null default 'private' check (visibility in ('private', 'public', 'unlisted')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table public.route_favorites (
+  user_id uuid references auth.users(id) on delete cascade,
+  route_id uuid references public.routes(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (user_id, route_id)
+);
+
+create table public.route_progress (
+  user_id uuid references auth.users(id) on delete cascade,
+  route_id uuid references public.routes(id) on delete cascade,
+  node_id text not null,
+  status text not null check (status in ('learned', 'learning', 'unlearned')),
+  updated_at timestamptz not null default now(),
+  primary key (user_id, route_id, node_id)
+);
+```
+
+RLS 方向：
+
+- `routes` 私有记录只能 owner 读写，`public` / `unlisted` 可以公开读。
+- `route_favorites` 和 `route_progress` 只能当前登录用户读写自己的记录。
+- 服务端生成短分享链接时只暴露 `routes.id` 或单独的 `share_slug`，不再把完整路线塞进 URL hash。
 
 ### 前端 UI
 
@@ -242,6 +292,8 @@ AI_RATE_LIMIT_ASSISTANT=60
 MATERIAL_MAX_FILE_MB=8
 MATERIAL_MAX_URL_MB=2
 MATERIAL_MAX_TEXT_MB=1
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_your-key
 ```
 
 启动开发服务器：
@@ -271,6 +323,8 @@ AI_RATE_LIMIT_ASSISTANT=60
 MATERIAL_MAX_FILE_MB=8
 MATERIAL_MAX_URL_MB=2
 MATERIAL_MAX_TEXT_MB=1
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_your-key
 ```
 
 不要把真实 API key 写入源码、README、前端代码或 GitHub commit。
