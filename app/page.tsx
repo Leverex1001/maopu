@@ -1278,10 +1278,16 @@ function MapPage({
   const [search, setSearch] = useState("");
   const [exportOpen, setExportOpen] = useState(false);
   const [searchMiss, setSearchMiss] = useState("");
+  const exportOptions: Array<{ kind: "markdown" | "json" | "svg"; label: string }> = [
+    { kind: "markdown", label: "Markdown" },
+    { kind: "json", label: "JSON" },
+    { kind: "svg", label: "SVG 地图" }
+  ];
   const sidebarItems: MapSidebarItem[] = [
     { icon: MapIcon, label: "地图", active: true, onClick: () => setView("map") },
     { icon: CheckCircle2, label: "保存", onClick: onSave },
     { icon: Share2, label: "分享", onClick: onShare },
+    { icon: Download, label: "导出", onClick: () => setExportOpen((value) => !value) },
     { icon: UploadCloud, label: "导入", onClick: () => setView("upload") },
     { icon: Plus, label: "新建", onClick: onNewRoute },
     { icon: CircleUserRound, label: "我的", onClick: () => setView("universe") }
@@ -1345,15 +1351,11 @@ function MapPage({
             </OutlineButton>
             {exportOpen && (
               <div className="absolute right-0 top-14 z-30 w-44 rounded-2xl border border-line bg-white p-2 shadow-panel">
-                {[
-                  ["markdown", "Markdown"],
-                  ["json", "JSON"],
-                  ["svg", "SVG 地图"]
-                ].map(([kind, label]) => (
+                {exportOptions.map(({ kind, label }) => (
                   <button
                     key={kind}
                     onClick={() => {
-                      onExport(kind as "markdown" | "json" | "svg");
+                      onExport(kind);
                       setExportOpen(false);
                     }}
                     className="block w-full rounded-xl px-4 py-3 text-left font-bold text-muted hover:bg-brand-50 hover:text-brand-500"
@@ -1387,6 +1389,22 @@ function MapPage({
         </aside>
 
         <section className="relative">
+          {exportOpen && (
+            <div className="absolute left-6 top-6 z-30 w-44 rounded-2xl border border-line bg-white p-2 shadow-panel lg:hidden">
+              {exportOptions.map(({ kind, label }) => (
+                <button
+                  key={kind}
+                  onClick={() => {
+                    onExport(kind);
+                    setExportOpen(false);
+                  }}
+                  className="block w-full rounded-xl px-4 py-3 text-left font-bold text-muted hover:bg-brand-50 hover:text-brand-500"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="absolute left-6 top-6 z-10 rounded-3xl border border-line bg-white/92 p-5 shadow-soft backdrop-blur">
             <h1 className="text-3xl font-black">{route.title}</h1>
             <p className="mt-2 max-w-xl text-sm leading-6 text-muted">{route.description}</p>
