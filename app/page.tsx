@@ -1256,6 +1256,7 @@ function MapPage({
 }) {
   const learned = route.nodes.filter((node) => node.status === "learned").length;
   const learning = route.nodes.filter((node) => node.status === "learning").length;
+  const progress = calculateProgress(route);
   const [search, setSearch] = useState("");
   const [exportOpen, setExportOpen] = useState(false);
   const [searchMiss, setSearchMiss] = useState("");
@@ -1373,6 +1374,15 @@ function MapPage({
               <span className="rounded-full bg-emerald-50 px-3 py-2 text-emerald-700">{learned} 已点亮</span>
               <span className="rounded-full bg-amber-50 px-3 py-2 text-amber-700">{learning} 学习中</span>
               <span className="rounded-full bg-brand-50 px-3 py-2 text-brand-500">{route.nodes.length} 节点</span>
+            </div>
+            <div className="mt-4">
+              <div className="mb-2 flex items-center justify-between text-xs font-black text-muted">
+                <span>路线进度</span>
+                <span>{progress}%</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-brand-50">
+                <div className="h-full rounded-full bg-gradient-to-r from-brand-500 to-violet-500" style={{ width: `${progress}%` }} />
+              </div>
             </div>
           </div>
           {route.nodes.length === 0 && (
