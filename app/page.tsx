@@ -2251,6 +2251,72 @@ function AccountSyncPanel({ routes, notify }: { routes: MaopuRoute[]; notify: (m
   );
 }
 
+function ProductReadinessPanel({ routes, publishedCount }: { routes: MaopuRoute[]; publishedCount: number }) {
+  const supabaseReady = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY);
+  const averageHealth = routes.length
+    ? Math.round(routes.reduce((total, item) => total + analyzeRouteHealth(item).score, 0) / routes.length)
+    : 0;
+  const checks = [
+    {
+      label: "本地路线",
+      value: `${routes.length} 条`,
+      ready: routes.length > 0,
+      detail: routes.length > 0 ? "已有可迁移数据" : "还没有路线数据"
+    },
+    {
+      label: "本地发布",
+      value: `${publishedCount} 条`,
+      ready: publishedCount > 0,
+      detail: publishedCount > 0 ? "社区草稿已开始沉淀" : "可从社区页发布当前路线"
+    },
+    {
+      label: "Supabase",
+      value: supabaseReady ? "已配置" : "未配置",
+      ready: supabaseReady,
+      detail: supabaseReady ? "前端公开变量已就绪" : "需要配置 URL 和 publishable key"
+    },
+    {
+      label: "路线质量",
+      value: `${averageHealth}%`,
+      ready: averageHealth >= 70,
+      detail: averageHealth >= 70 ? "路线结构适合分享" : "继续补依赖、资源和核心节点"
+    }
+  ];
+
+  return (
+    <section className="rounded-3xl border border-line bg-white p-6 shadow-soft sm:p-9">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <p className="text-sm font-black text-brand-500">产品自检</p>
+          <h2 className="mt-2 text-3xl font-black">上线前状态</h2>
+        </div>
+        <span className="rounded-full bg-brand-50 px-3 py-2 text-sm font-black text-brand-500">{checks.filter((item) => item.ready).length}/{checks.length}</span>
+      </div>
+      <div className="mt-6 grid gap-3">
+        {checks.map((item) => (
+          <div key={item.label} className="flex items-start justify-between gap-4 rounded-2xl border border-line p-4">
+            <div className="flex gap-3">
+              {item.ready ? (
+                <CheckCircle2 className="mt-1 h-5 w-5 shrink-0 text-emerald-600" />
+              ) : (
+                <AlertTriangle className="mt-1 h-5 w-5 shrink-0 text-amber-600" />
+              )}
+              <div>
+                <h3 className="font-black">{item.label}</h3>
+                <p className="mt-1 text-sm leading-6 text-muted">{item.detail}</p>
+              </div>
+            </div>
+            <strong className={item.ready ? "text-emerald-700" : "text-amber-700"}>{item.value}</strong>
+          </div>
+        ))}
+      </div>
+      <p className="mt-5 rounded-2xl bg-brand-50 p-4 text-sm font-semibold leading-6 text-muted">
+        AI key 是服务端私密变量，不在前端暴露；以 `/api/generate-route`、`/api/assistant` 是否正常响应作为线上验证。
+      </p>
+    </section>
+  );
+}
+
 function UniversePage({
   currentRoute,
   onOpenRoute,
@@ -2265,9 +2331,11 @@ function UniversePage({
   setView: (view: View) => void;
 }) {
   const [savedRoutes, setSavedRoutes] = useState<MaopuRoute[]>([]);
+  const [publishedCount, setPublishedCount] = useState(0);
 
   useEffect(() => {
     setSavedRoutes(safeSavedRoutes());
+    setPublishedCount(safePublishedRoutes().length);
   }, []);
 
   const routes = savedRoutes.length ? savedRoutes : currentRoute.nodes.length ? [currentRoute] : [];
@@ -2333,6 +2401,7 @@ function UniversePage({
           </button>
         </div>
         <div className="grid gap-6">
+          <ProductReadinessPanel routes={routes} publishedCount={publishedCount} />
           <AccountSyncPanel routes={routes} notify={notify} />
           <div className="rounded-3xl border border-line bg-white p-6 shadow-soft sm:p-9">
             <h2 className="text-3xl font-black">学习概览</h2>
