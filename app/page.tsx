@@ -34,8 +34,10 @@ import {
   GraduationCap,
   Heart,
   Home,
+  KeyRound,
   Layers3,
   Library,
+  LockKeyhole,
   Map as MapIcon,
   MessageCircle,
   PanelRightOpen,
@@ -44,6 +46,7 @@ import {
   Search,
   Send,
   Share2,
+  ShieldCheck,
   Sparkles,
   Trash2,
   UploadCloud,
@@ -556,6 +559,31 @@ function OutlineButton({ children, className = "", ...props }: React.ButtonHTMLA
   );
 }
 
+function MobileNav({ setView, compact = false }: { setView: (view: View) => void; compact?: boolean }) {
+  const items: Array<{ icon: React.ComponentType<{ className?: string }>; label: string; view: View }> = [
+    { icon: Home, label: "首页", view: "landing" },
+    { icon: UploadCloud, label: "上传", view: "upload" },
+    { icon: Library, label: "社区", view: "community" },
+    { icon: GraduationCap, label: "我的", view: "universe" }
+  ];
+
+  return (
+    <nav className={`grid grid-cols-4 gap-2 lg:hidden ${compact ? "px-4 py-3" : "mx-auto mt-5 max-w-[1440px]"}`} aria-label="移动端导航">
+      {items.map(({ icon: Icon, label, view }) => (
+        <button
+          key={view}
+          type="button"
+          onClick={() => setView(view)}
+          className="flex min-h-12 items-center justify-center gap-1.5 rounded-xl border border-line bg-white px-2 text-sm font-black text-muted shadow-soft transition hover:border-brand-500 hover:text-brand-500"
+        >
+          <Icon className="h-4 w-4 shrink-0" />
+          <span>{label}</span>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
 function MascotStyleSwitch({
   variant,
   onChange,
@@ -765,19 +793,20 @@ function LandingPage({
           </button>
         </nav>
       </header>
+      <MobileNav setView={setView} />
 
-      <section className="mx-auto grid max-w-[1440px] items-center gap-10 pb-12 pt-20 lg:grid-cols-[1.05fr_.95fr]">
+      <section className="mx-auto grid max-w-[1440px] items-center gap-10 pb-12 pt-12 lg:grid-cols-[1.05fr_.95fr] lg:pt-20">
         <div>
           <p className="mb-5 inline-flex items-center gap-2 rounded-full border border-brand-100 bg-white px-4 py-2 font-bold text-brand-500 shadow-soft">
             <Compass className="h-5 w-5" />
             路线规划工作台
           </p>
-          <h1 className="max-w-3xl text-5xl font-black leading-tight tracking-normal lg:text-7xl">先识别你的目标，再规划路线。</h1>
-          <p className="mt-6 max-w-2xl text-xl leading-9 text-muted">
+          <h1 className="max-w-3xl text-4xl font-black leading-tight tracking-normal sm:text-5xl lg:text-7xl">先识别你的目标，再规划路线。</h1>
+          <p className="mt-6 max-w-2xl text-lg leading-8 text-muted sm:text-xl sm:leading-9">
             不从预设模板开始。你描述目标、基础、时间和资料，猫扑先识别学习需求，再生成一张属于你的知识地图。
           </p>
 
-          <form onSubmit={submit} className="mt-10 rounded-3xl border border-brand-100 bg-white p-5 shadow-soft">
+          <form onSubmit={submit} className="mt-8 rounded-3xl border border-brand-100 bg-white p-4 shadow-soft sm:mt-10 sm:p-5">
             <div className="flex flex-col gap-4">
               <label className="flex items-center gap-2 text-lg font-black" htmlFor="goal">
                 <Sparkles className="h-5 w-5 text-brand-500" />
@@ -787,7 +816,7 @@ function LandingPage({
                 id="goal"
                 value={goal}
                 onChange={(event) => setGoal(event.target.value)}
-                className="min-h-36 resize-y rounded-2xl border border-line px-5 py-4 text-lg font-semibold leading-8 outline-none focus:border-brand-500"
+                className="min-h-32 resize-y rounded-2xl border border-line px-5 py-4 text-base font-semibold leading-7 outline-none focus:border-brand-500 sm:min-h-36 sm:text-lg sm:leading-8"
                 placeholder="例如：我会一点 HTML/CSS，想在 8 周内做出一个能放进简历的全栈项目；或者粘贴课程大纲、考试范围、岗位 JD..."
               />
               <div className="flex flex-col gap-3 sm:flex-row">
@@ -960,13 +989,15 @@ function MapCanvas({
       className="map-grid"
     >
       <Background color="#dcd8f3" gap={18} size={1} />
-      <MiniMap
-        pannable
-        zoomable
-        position="top-left"
-        className="!left-5 !top-5 !h-36 !w-56 overflow-hidden !rounded-2xl !border !border-line !bg-white/90 !shadow-soft"
-        nodeColor={(node) => domainStyles[(node.data as KnowledgeNode).domain].border}
-      />
+      {route.nodes.length > 0 && (
+        <MiniMap
+          pannable
+          zoomable
+          position="top-left"
+          className="!left-5 !top-5 !h-36 !w-56 overflow-hidden !rounded-2xl !border !border-line !bg-white/90 !shadow-soft"
+          nodeColor={(node) => domainStyles[(node.data as KnowledgeNode).domain].border}
+        />
+      )}
       <Controls position="top-right" className="!right-5 !top-5 !overflow-hidden !rounded-2xl !border !border-line !shadow-soft" />
       <button
         onClick={() => fitView({ padding: 0.16, duration: 500 })}
@@ -1493,61 +1524,63 @@ function MapPage({
               ))}
             </div>
           )}
-          <div className="absolute left-4 top-4 z-10 max-h-[calc(100vh-128px)] w-[min(620px,calc(100%-32px))] overflow-y-auto rounded-3xl border border-line bg-white/92 p-4 shadow-soft backdrop-blur sm:left-6 sm:top-6 sm:w-[min(620px,calc(100%-48px))] sm:p-5">
-            <h1 className="text-2xl font-black sm:text-3xl">{route.title}</h1>
-            <p className="mt-2 max-w-xl text-sm leading-6 text-muted">{route.description}</p>
-            <div className="mt-4 flex flex-wrap gap-3 text-sm font-bold">
-              <span className="rounded-full bg-emerald-50 px-3 py-2 text-emerald-700">{learned} 已点亮</span>
-              <span className="rounded-full bg-amber-50 px-3 py-2 text-amber-700">{learning} 学习中</span>
-              <span className="rounded-full bg-brand-50 px-3 py-2 text-brand-500">{route.nodes.length} 节点</span>
-            </div>
-            <div className="mt-4">
-              <div className="mb-2 flex items-center justify-between text-xs font-black text-muted">
-                <span>路线进度</span>
-                <span>{progress}%</span>
+          {route.nodes.length > 0 && (
+            <div className="absolute left-4 top-4 z-10 max-h-[calc(100vh-128px)] w-[min(620px,calc(100%-32px))] overflow-y-auto rounded-3xl border border-line bg-white/92 p-4 shadow-soft backdrop-blur sm:left-6 sm:top-6 sm:w-[min(620px,calc(100%-48px))] sm:p-5">
+              <h1 className="text-2xl font-black sm:text-3xl">{route.title}</h1>
+              <p className="mt-2 max-w-xl text-sm leading-6 text-muted">{route.description}</p>
+              <div className="mt-4 flex flex-wrap gap-3 text-sm font-bold">
+                <span className="rounded-full bg-emerald-50 px-3 py-2 text-emerald-700">{learned} 已点亮</span>
+                <span className="rounded-full bg-amber-50 px-3 py-2 text-amber-700">{learning} 学习中</span>
+                <span className="rounded-full bg-brand-50 px-3 py-2 text-brand-500">{route.nodes.length} 节点</span>
               </div>
-              <div className="h-2 overflow-hidden rounded-full bg-brand-50">
-                <div className="h-full rounded-full bg-gradient-to-r from-brand-500 to-violet-500" style={{ width: `${progress}%` }} />
-              </div>
-            </div>
-            <div className="mt-4 rounded-2xl border border-line bg-white/80 p-4">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs font-black text-muted">路线体检</p>
-                  <p className="mt-1 text-sm font-bold text-muted">{health.summary}</p>
+              <div className="mt-4">
+                <div className="mb-2 flex items-center justify-between text-xs font-black text-muted">
+                  <span>路线进度</span>
+                  <span>{progress}%</span>
                 </div>
-                <strong
-                  className={`rounded-xl px-3 py-2 text-lg ${
-                    health.score >= 85
-                      ? "bg-emerald-50 text-emerald-700"
-                      : health.score >= 65
-                        ? "bg-amber-50 text-amber-700"
-                        : "bg-rose-50 text-rose-700"
-                  }`}
-                >
-                  {health.score}
-                </strong>
+                <div className="h-2 overflow-hidden rounded-full bg-brand-50">
+                  <div className="h-full rounded-full bg-gradient-to-r from-brand-500 to-violet-500" style={{ width: `${progress}%` }} />
+                </div>
               </div>
-              <div className="mt-3 grid gap-2">
-                {health.items.map((item) => (
-                  <div key={item.id} className="flex items-start gap-2 text-sm font-bold text-muted">
-                    {item.tone === "ok" ? (
-                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-                    ) : (
-                      <AlertTriangle className={`mt-0.5 h-4 w-4 shrink-0 ${item.tone === "danger" ? "text-rose-600" : "text-amber-600"}`} />
-                    )}
-                    <span>
-                      <span className="text-ink">{item.label}</span>
-                      <span className="ml-1 font-semibold">{item.detail}</span>
-                    </span>
+              <div className="mt-4 rounded-2xl border border-line bg-white/80 p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-black text-muted">路线体检</p>
+                    <p className="mt-1 text-sm font-bold text-muted">{health.summary}</p>
                   </div>
-                ))}
+                  <strong
+                    className={`rounded-xl px-3 py-2 text-lg ${
+                      health.score >= 85
+                        ? "bg-emerald-50 text-emerald-700"
+                        : health.score >= 65
+                          ? "bg-amber-50 text-amber-700"
+                          : "bg-rose-50 text-rose-700"
+                    }`}
+                  >
+                    {health.score}
+                  </strong>
+                </div>
+                <div className="mt-3 grid gap-2">
+                  {health.items.map((item) => (
+                    <div key={item.id} className="flex items-start gap-2 text-sm font-bold text-muted">
+                      {item.tone === "ok" ? (
+                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                      ) : (
+                        <AlertTriangle className={`mt-0.5 h-4 w-4 shrink-0 ${item.tone === "danger" ? "text-rose-600" : "text-amber-600"}`} />
+                      )}
+                      <span>
+                        <span className="text-ink">{item.label}</span>
+                        <span className="ml-1 font-semibold">{item.detail}</span>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-3 rounded-xl bg-brand-50 px-3 py-2 text-sm font-bold leading-6 text-brand-500">
+                  下一步：{health.nextAction}
+                </p>
               </div>
-              <p className="mt-3 rounded-xl bg-brand-50 px-3 py-2 text-sm font-bold leading-6 text-brand-500">
-                下一步：{health.nextAction}
-              </p>
             </div>
-          </div>
+          )}
           {route.nodes.length === 0 && (
             <div className="absolute left-1/2 top-1/2 z-20 w-[min(520px,calc(100%-48px))] -translate-x-1/2 -translate-y-1/2 rounded-3xl border border-brand-100 bg-white/94 p-8 text-center shadow-panel backdrop-blur">
               <Compass className="mx-auto h-10 w-10 text-brand-500" />
@@ -1672,8 +1705,8 @@ function UploadPage({
 
   return (
     <Shell title="上传解析中心" setView={setView}>
-      <div className="mx-auto grid max-w-[1440px] gap-10 px-6 py-12 lg:grid-cols-[1.45fr_.85fr]">
-        <section className="rounded-3xl border border-line bg-white p-8 shadow-soft">
+      <div className="mx-auto grid max-w-[1440px] gap-6 px-6 py-8 sm:gap-10 sm:py-12 lg:grid-cols-[1.45fr_.85fr]">
+        <section className="rounded-3xl border border-line bg-white p-5 shadow-soft sm:p-8">
           <input
             ref={fileInputRef}
             type="file"
@@ -1694,33 +1727,33 @@ function UploadPage({
               const file = event.dataTransfer.files?.[0];
               if (file) void handleFile(file);
             }}
-            className="grid min-h-[300px] w-full place-items-center rounded-3xl border-2 border-dashed border-brand-100 bg-brand-50/30 text-center transition hover:border-brand-500"
+            className="grid min-h-[240px] w-full place-items-center rounded-3xl border-2 border-dashed border-brand-100 bg-brand-50/30 px-4 text-center transition hover:border-brand-500 sm:min-h-[300px]"
           >
             <div>
-              <span className="mx-auto grid h-24 w-24 place-items-center rounded-full bg-white text-brand-500 shadow-soft">
-                <UploadCloud className="h-12 w-12" />
+              <span className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-white text-brand-500 shadow-soft sm:h-24 sm:w-24">
+                <UploadCloud className="h-10 w-10 sm:h-12 sm:w-12" />
               </span>
-              <h2 className="mt-7 text-4xl font-black">选择或拖入学习资料</h2>
-              <p className="mt-4 text-xl text-muted">支持 Markdown / JSON 路线 / CSV / 文本 / PDF / Excel，解析后可直接生成路线</p>
-              <span className="mt-8 inline-flex rounded-xl bg-gradient-to-r from-brand-500 to-violet-500 px-7 py-4 font-bold text-white shadow-soft">
+              <h2 className="mt-6 text-2xl font-black sm:mt-7 sm:text-4xl">选择或拖入学习资料</h2>
+              <p className="mt-3 text-base leading-7 text-muted sm:mt-4 sm:text-xl">支持 Markdown / JSON 路线 / CSV / 文本 / PDF / Excel，解析后可直接生成路线</p>
+              <span className="mt-6 inline-flex rounded-xl bg-gradient-to-r from-brand-500 to-violet-500 px-6 py-3 font-bold text-white shadow-soft sm:mt-8 sm:px-7 sm:py-4">
                 {parsing ? "正在读取..." : fileName || "选择文件"}
               </span>
             </div>
           </button>
 
-          <label className="mt-8 block text-xl font-black" htmlFor="sourceText">
+          <label className="mt-7 block text-lg font-black sm:mt-8 sm:text-xl" htmlFor="sourceText">
             资料内容
           </label>
           <textarea
             id="sourceText"
             value={sourceText}
             onChange={(event) => setSourceText(event.target.value)}
-            className="mt-3 min-h-52 w-full resize-y rounded-2xl border border-line px-5 py-4 leading-7 outline-none focus:border-brand-500"
+            className="mt-3 min-h-40 w-full resize-y rounded-2xl border border-line px-5 py-4 leading-7 outline-none focus:border-brand-500 sm:min-h-52"
             placeholder="可以粘贴课程大纲、岗位 JD、考试范围、学习笔记，猫扑会先识别再生成路线。"
           />
           {parseSummary && <p className="mt-3 rounded-xl bg-brand-50 px-4 py-3 font-bold text-brand-500">{parseSummary}</p>}
 
-          <label className="mt-6 block text-xl font-black" htmlFor="githubUrl">
+          <label className="mt-6 block text-lg font-black sm:text-xl" htmlFor="githubUrl">
             GitHub / 网页链接
           </label>
           <input
@@ -1754,8 +1787,8 @@ function UploadPage({
             </OutlineButton>
           </div>
         </section>
-        <div className="rounded-3xl border border-line bg-white p-10 shadow-soft">
-          <h2 className="text-3xl font-black">支持的格式</h2>
+        <div className="rounded-3xl border border-line bg-white p-6 shadow-soft sm:p-10">
+          <h2 className="text-2xl font-black sm:text-3xl">支持的格式</h2>
           {[
             [FileText, "文本 / Markdown", "直接读取内容并交给 AI 识别"],
             [Layers3, "JSON 路线", "符合 Route 结构时可直接导入地图"],
@@ -1763,11 +1796,11 @@ function UploadPage({
             [FileText, "PDF / Excel", "抽取文档文本和工作表内容"],
             [GitFork, "GitHub 链接", "作为资料来源纳入路线规划"]
           ].map(([Icon, title, desc]) => (
-            <div key={String(title)} className="mt-10 flex gap-5">
-              <Icon className="h-10 w-10 text-ink" />
+            <div key={String(title)} className="mt-7 flex gap-4 sm:mt-10 sm:gap-5">
+              <Icon className="h-8 w-8 shrink-0 text-ink sm:h-10 sm:w-10" />
               <div>
-                <h3 className="text-2xl font-black">{String(title)}</h3>
-                <p className="mt-2 text-xl text-muted">{String(desc)}</p>
+                <h3 className="text-xl font-black sm:text-2xl">{String(title)}</h3>
+                <p className="mt-2 text-base leading-7 text-muted sm:text-xl">{String(desc)}</p>
               </div>
             </div>
           ))}
@@ -1918,6 +1951,60 @@ ${card.builtinRoute.description}
   );
 }
 
+function AccountSyncPanel({ routeCount }: { routeCount: number }) {
+  const authTasks = [
+    { icon: KeyRound, title: "登录 / 注册", text: "接入 Supabase Auth 或 Auth.js 后启用邮箱、OAuth 和会话保持。" },
+    { icon: ShieldCheck, title: "权限保护", text: "路线、收藏和学习记录按用户隔离，公开路线再单独发布。" },
+    { icon: LockKeyhole, title: "云端同步", text: "把本地路线迁移到数据库，并用短分享链接替代压缩 hash。" }
+  ];
+
+  return (
+    <section className="rounded-3xl border border-brand-100 bg-white p-6 shadow-soft sm:p-9">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-sm font-black text-brand-500">账号体系预留</p>
+          <h2 className="mt-2 text-3xl font-black">登录后同步学习地图</h2>
+        </div>
+        <span className="rounded-full bg-amber-50 px-3 py-2 text-sm font-black text-amber-700">待接入</span>
+      </div>
+      <p className="mt-4 leading-7 text-muted">
+        当前有 {routeCount} 条路线在本地浏览器里。下一步接入开源认证模块后，可以迁移到云端，支持换设备继续学习。
+      </p>
+      <div className="mt-6 grid gap-3">
+        {authTasks.map(({ icon: Icon, title, text }) => (
+          <div key={title} className="flex gap-4 rounded-2xl border border-line bg-white p-4">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-500">
+              <Icon className="h-5 w-5" />
+            </span>
+            <div>
+              <h3 className="font-black">{title}</h3>
+              <p className="mt-1 text-sm leading-6 text-muted">{text}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-6 grid gap-3 sm:grid-cols-2">
+        <button
+          type="button"
+          disabled
+          className="rounded-xl bg-brand-100 px-5 py-3 font-black text-brand-500 opacity-70"
+          title="接入 Supabase Auth 后启用"
+        >
+          登录 / 注册
+        </button>
+        <button
+          type="button"
+          disabled
+          className="rounded-xl border border-line bg-white px-5 py-3 font-black text-muted opacity-70"
+          title="接入数据库后启用"
+        >
+          迁移本地路线
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function UniversePage({
   currentRoute,
   onOpenRoute,
@@ -1953,8 +2040,8 @@ function UniversePage({
 
   return (
     <Shell title="我的学习" setView={setView}>
-      <div className="mx-auto grid max-w-[1440px] items-center gap-10 px-6 py-12 lg:grid-cols-[1fr_360px_1fr]">
-        <div className="rounded-3xl border border-line bg-white p-9 shadow-soft">
+      <div className="mx-auto grid max-w-[1440px] items-start gap-6 px-6 py-8 sm:gap-10 sm:py-12 xl:grid-cols-[minmax(0,1.08fr)_minmax(380px,0.92fr)]">
+        <div className="rounded-3xl border border-line bg-white p-6 shadow-soft sm:p-9">
           <div className="flex items-center justify-between gap-4">
             <h2 className="text-3xl font-black">我的路线</h2>
             <button onClick={onNewRoute} className="rounded-xl bg-brand-50 px-4 py-3 font-black text-brand-500">
@@ -1976,7 +2063,7 @@ function UniversePage({
               const status = progress >= 100 ? "已完成" : progress > 0 ? "学习中" : "未开始";
               const color = progress >= 100 ? "bg-emerald-100 text-emerald-600" : progress > 0 ? "bg-amber-100 text-amber-600" : "bg-brand-50 text-brand-500";
               return (
-                <div key={`${item.title}-${index}`} className="flex items-center gap-5 border-b border-line py-8">
+                <div key={`${item.title}-${index}`} className="flex flex-wrap items-center gap-4 border-b border-line py-6 sm:flex-nowrap sm:gap-5 sm:py-8">
                   <button onClick={() => onOpenRoute(item)} className={`grid h-16 w-16 place-items-center rounded-2xl ${color}`} aria-label={`打开路线 ${item.title}`}>
                     <Boxes className="h-8 w-8" />
                   </button>
@@ -1999,41 +2086,43 @@ function UniversePage({
             查看社区路线 <ChevronRight className="inline h-5 w-5" />
           </button>
         </div>
-        <div className="mascot-full min-h-[620px] rounded-[2rem]" />
-        <div className="rounded-3xl border border-line bg-white p-9 shadow-soft">
-          <h2 className="text-3xl font-black">学习概览</h2>
-          <div className="mt-9 grid grid-cols-3 gap-4 border-b border-line pb-9 text-center text-muted">
-            {[
-              ["已学知识点", String(learnedCount)],
-              ["保存路线", String(routes.length)],
-              ["项目建议", String(projectCount)]
-            ].map(([label, value]) => (
-              <div key={label}>
-                <p className="font-semibold">{label}</p>
-                <strong className="mt-3 block text-5xl text-ink">{value}</strong>
-              </div>
-            ))}
-          </div>
-          <h3 className="mt-10 text-2xl font-black">最近学习</h3>
-          {recentNodes.length ? (
-            recentNodes.map((item, index) => (
-                <div key={item.id} className="mt-7 flex items-center justify-between text-xl text-muted">
-                  <span className="flex items-center gap-3">
-                    <BookOpen className="h-6 w-6 text-brand-500" />
-                    {item.title}
-                  </span>
-                  <span>{index === 0 ? "刚刚" : `${index + 1} 个节点前`}</span>
+        <div className="grid gap-6">
+          <AccountSyncPanel routeCount={routes.length} />
+          <div className="rounded-3xl border border-line bg-white p-6 shadow-soft sm:p-9">
+            <h2 className="text-3xl font-black">学习概览</h2>
+            <div className="mt-8 grid grid-cols-3 gap-3 border-b border-line pb-8 text-center text-muted sm:mt-9 sm:gap-4 sm:pb-9">
+              {[
+                ["已学知识点", String(learnedCount)],
+                ["保存路线", String(routes.length)],
+                ["项目建议", String(projectCount)]
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <p className="font-semibold">{label}</p>
+                  <strong className="mt-3 block text-3xl text-ink sm:text-5xl">{value}</strong>
                 </div>
-              ))
-          ) : (
-            <p className="mt-7 leading-7 text-muted">还没有学习记录。打开一条路线，把节点状态改成“学习中”或“已学习”后，这里会更新。</p>
-          )}
-          <div className="mt-10 rounded-2xl bg-brand-50 p-5">
-            <p className="font-black text-brand-500">当前路线进度</p>
-            <div className="mt-4 h-3 overflow-hidden rounded-full bg-white">
-              <div className="h-full rounded-full bg-brand-500" style={{ width: `${currentProgress}%` }} />
+              ))}
             </div>
-            <p className="mt-3 text-sm font-bold text-muted">{currentProgress}%</p>
+            <h3 className="mt-10 text-2xl font-black">最近学习</h3>
+            {recentNodes.length ? (
+              recentNodes.map((item, index) => (
+                  <div key={item.id} className="mt-7 flex items-center justify-between text-xl text-muted">
+                    <span className="flex items-center gap-3">
+                      <BookOpen className="h-6 w-6 text-brand-500" />
+                      {item.title}
+                    </span>
+                    <span>{index === 0 ? "刚刚" : `${index + 1} 个节点前`}</span>
+                  </div>
+                ))
+            ) : (
+              <p className="mt-7 leading-7 text-muted">还没有学习记录。打开一条路线，把节点状态改成“学习中”或“已学习”后，这里会更新。</p>
+            )}
+            <div className="mt-10 rounded-2xl bg-brand-50 p-5">
+              <p className="font-black text-brand-500">当前路线进度</p>
+              <div className="mt-4 h-3 overflow-hidden rounded-full bg-white">
+                <div className="h-full rounded-full bg-brand-500" style={{ width: `${currentProgress}%` }} />
+              </div>
+              <p className="mt-3 text-sm font-bold text-muted">{currentProgress}%</p>
+            </div>
           </div>
         </div>
       </div>
@@ -2044,7 +2133,7 @@ function UniversePage({
 function Shell({ title, children, setView }: { title: string; children: React.ReactNode; setView: (view: View) => void }) {
   return (
     <main className="min-h-screen">
-      <header className="flex items-center justify-between border-b border-line bg-white px-7 py-5">
+      <header className="flex items-center justify-between border-b border-line bg-white px-5 py-5 sm:px-7">
         <Logo />
         <nav className="hidden items-center gap-7 text-lg font-bold lg:flex">
           <button onClick={() => setView("landing")} className="flex items-center gap-2 hover:text-brand-500">
@@ -2065,8 +2154,9 @@ function Shell({ title, children, setView }: { title: string; children: React.Re
           </button>
         </nav>
       </header>
-      <div className="mx-auto max-w-[1440px] px-6 pt-10">
-        <h1 className="text-5xl font-black">{title}</h1>
+      <MobileNav setView={setView} compact />
+      <div className="mx-auto max-w-[1440px] px-6 pt-8 sm:pt-10">
+        <h1 className="text-4xl font-black sm:text-5xl">{title}</h1>
       </div>
       {children}
     </main>
@@ -2083,6 +2173,10 @@ export default function HomePage() {
   const [recognition, setRecognition] = useState<RecognitionResult | null>(null);
   const [mascotVariant, setMascotVariant] = useState<MascotVariant>("planner");
   const [toasts, setToasts] = useState<Toast[]>([]);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0 });
+  }, [view]);
 
   useEffect(() => {
     const savedMascotStyle = window.localStorage.getItem(MASCOT_STYLE_KEY);

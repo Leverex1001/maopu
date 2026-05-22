@@ -45,6 +45,10 @@
 - 图标按钮补充了可访问名称，键盘和辅助技术能识别其用途。
 - 地图页新增路线体检：会给当前路线打分，并检查断开的依赖、重复节点、孤立节点、核心节点、资源和项目建议是否缺失。
 - 地图页浮层在窄屏会限制宽度和高度，侧边栏可滚动，避免按钮或路线体检内容撑出横向滚动。
+- 首页和普通页面补充移动端快捷导航，上传页与我的学习页在窄屏下会收紧卡片、标题和图片占位，降低重合和穿模风险。
+- 空白地图状态会隐藏路线体检浮层，只保留空状态引导，避免弹窗后方文字穿模。
+- 视图切换会自动回到页面顶部，避免从首页生成路线后地图页继承旧滚动位置导致画布半屏或黑屏。
+- 我的学习页新增账号与云同步入口，预留登录/注册、权限保护和本地路线迁移的产品位置。
 
 ### 小扑助手
 
@@ -132,6 +136,7 @@
 - 分享功能已可打开同一张路线，但还不是数据库短链接。
 - 社区页还是内置路线数据，不是真正的用户发布社区。
 - 收藏、学习记录和路线保存目前都在浏览器本地，清缓存或换设备会丢失。
+- 账号与云同步目前只有入口 UI，真实登录注册需要接入 Supabase Auth 或 Auth.js。
 
 ### AI 能力
 
@@ -153,6 +158,29 @@
 - 还没有端到端测试。
 - 国内访问 Vercel 可能不稳定，正式给国内用户使用需要考虑国内部署。
 
+## 可接入开源模块调研
+
+### 登录注册 / 用户系统
+
+- **Supabase Auth + Next.js App Router**：官方 quickstart 已提供 cookie-based auth、TypeScript、Tailwind 的 `with-supabase` 模板，适合同时补登录、云端路线保存和 RLS 权限。
+- **Auth.js / NextAuth**：适合只想先做 OAuth、邮箱登录和 session，不急着绑定 Supabase 数据层的路线。
+- **login-register-supabase**：GitHub 上有 Next.js 15 + React 19 + Supabase 的登录注册样板，可参考目录结构和 AuthContext，但正式接入建议按本项目现有 App Router 结构重写，而不是整仓复制。
+
+### 前端 UI
+
+- **shadcn/ui blocks**：认证页已有 `login-01` 等开源 block，可以复制登录/注册表单源码，再改成猫扑视觉风格。
+- **Radix UI primitives**：适合替换当前手写的弹窗、菜单、标签页和 tooltip，提高键盘可访问性。
+- **React Hook Form + Zod**：适合登录、注册、路线发布、节点编辑等表单校验。
+
+### Codex Skills
+
+- 可用 `$skill-installer` 从 `openai/skills` 安装 curated skills。
+- 对猫扑当前最有用的候选：
+  - `playwright` / `screenshot`：做页面穿模和端到端视觉验证。
+  - `vercel-deploy`：规范 Vercel 部署流程。
+  - `security-threat-model` / `security-best-practices`：接入登录、分享和用户数据前做安全梳理。
+  - `gh-fix-ci` / `gh-address-comments`：后续接 GitHub PR 工作流时使用。
+
 ## 推荐实现顺序
 
 1. **API 限流和额度保护**
@@ -169,7 +197,7 @@
 
 4. **用户系统**
 
-   支持登录、我的路线、我的收藏、公开/私有路线。
+   优先用 Supabase Auth 或 Auth.js，不从零写密码登录；支持登录、我的路线、我的收藏、公开/私有路线。
 
 5. **真实社区**
 
