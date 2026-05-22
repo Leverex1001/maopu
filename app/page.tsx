@@ -194,6 +194,34 @@ const mascotStyles: Array<{ value: MascotVariant; label: string; description: st
   { value: "happy", label: "开心", description: "挥手鼓励，适合完成节点", avatar: "/maopu-images/mascot-avatar-happy.png" }
 ];
 
+const SUPABASE_SCHEMA_SQL = `create table public.routes (
+  id uuid primary key default gen_random_uuid(),
+  owner_id uuid references auth.users(id) on delete cascade,
+  title text not null,
+  description text not null default '',
+  summary text not null default '',
+  route jsonb not null,
+  visibility text not null default 'private' check (visibility in ('private', 'public', 'unlisted')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table public.route_favorites (
+  user_id uuid references auth.users(id) on delete cascade,
+  route_id uuid references public.routes(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (user_id, route_id)
+);
+
+create table public.route_progress (
+  user_id uuid references auth.users(id) on delete cascade,
+  route_id uuid references public.routes(id) on delete cascade,
+  node_id text not null,
+  status text not null check (status in ('learned', 'learning', 'unlearned')),
+  updated_at timestamptz not null default now(),
+  primary key (user_id, route_id, node_id)
+);`;
+
 function createBlankRoute(title = "我的自定义路线"): MaopuRoute {
   return {
     title,
@@ -1952,10 +1980,11 @@ ${card.builtinRoute.description}
   );
 }
 
-function AccountSyncPanel({ routeCount, notify }: { routeCount: number; notify: (message: string) => void }) {
+function AccountSyncPanel({ routes, notify }: { routes: MaopuRoute[]; notify: (message: string) => void }) {
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [authDraft, setAuthDraft] = useState({ name: "", email: "", password: "" });
   const supabaseReady = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY);
+  const routeCount = routes.length;
   const authTasks = [
     { icon: KeyRound, title: "登录 / 注册", text: "接入 Supabase Auth 或 Auth.js 后启用邮箱、OAuth 和会话保持。" },
     { icon: ShieldCheck, title: "权限保护", text: "路线、收藏和学习记录按用户隔离，公开路线再单独发布。" },
@@ -1981,6 +2010,38 @@ function AccountSyncPanel({ routeCount, notify }: { routeCount: number; notify: 
       return;
     }
     notify(supabaseReady ? "登录表单已就绪，下一步接 Supabase 服务端动作" : "登录表单已就绪，请先配置 Supabase 环境变量");
+  }
+
+  function exportMigrationPack() {
+    if (!routes.length) {
+      notify("还没有可迁移的本地路线");
+      return;
+    }
+
+    downloadText(
+      "maopu-local-routes-migration.json",
+      JSON.stringify(
+        {
+          version: 1,
+          exportedAt: new Date().toISOString(),
+          source: "maopu.localStorage",
+          routes
+        },
+        null,
+        2
+      ),
+      "application/json;charset=utf-8"
+    );
+    notify("已导出本地路线迁移包");
+  }
+
+  async function copySchemaSql() {
+    try {
+      await navigator.clipboard.writeText(SUPABASE_SCHEMA_SQL);
+      notify("Supabase 建表 SQL 已复制");
+    } catch {
+      notify("浏览器限制剪贴板，暂未复制 SQL");
+    }
   }
 
   return (
@@ -2065,13 +2126,24 @@ function AccountSyncPanel({ routeCount, notify }: { routeCount: number; notify: 
           </div>
         ))}
       </div>
-      <button
-        type="button"
-        onClick={() => notify("本地路线迁移需要先创建 routes 数据表")}
-        className="mt-6 w-full rounded-xl border border-line bg-white px-5 py-3 font-black text-muted transition hover:border-brand-500 hover:text-brand-500"
-      >
-        迁移本地路线
-      </button>
+      <div className="mt-6 grid gap-3 sm:grid-cols-2">
+        <button
+          type="button"
+          onClick={exportMigrationPack}
+          className="flex items-center justify-center gap-2 rounded-xl border border-line bg-white px-5 py-3 font-black text-muted transition hover:border-brand-500 hover:text-brand-500"
+        >
+          <Download className="h-5 w-5" />
+          导出迁移包
+        </button>
+        <button
+          type="button"
+          onClick={() => void copySchemaSql()}
+          className="flex items-center justify-center gap-2 rounded-xl border border-line bg-white px-5 py-3 font-black text-muted transition hover:border-brand-500 hover:text-brand-500"
+        >
+          <Copy className="h-5 w-5" />
+          复制建表 SQL
+        </button>
+      </div>
     </section>
   );
 }
@@ -2158,7 +2230,7 @@ function UniversePage({
           </button>
         </div>
         <div className="grid gap-6">
-          <AccountSyncPanel routeCount={routes.length} notify={notify} />
+          <AccountSyncPanel routes={routes} notify={notify} />
           <div className="rounded-3xl border border-line bg-white p-6 shadow-soft sm:p-9">
             <h2 className="text-3xl font-black">学习概览</h2>
             <div className="mt-8 grid grid-cols-3 gap-3 border-b border-line pb-8 text-center text-muted sm:mt-9 sm:gap-4 sm:pb-9">
