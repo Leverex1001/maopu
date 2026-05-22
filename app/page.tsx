@@ -1118,11 +1118,12 @@ function Assistant({
         body: JSON.stringify({ route, currentNode, action, question: nextQuestion })
       });
 
-      if (!response.ok) throw new Error("Assistant request failed");
+      if (!response.ok) throw new Error(await readApiError(response, "小扑暂时连不上 AI 服务"));
       const data = (await response.json()) as { message?: string };
       setMessage(data.message || "小扑暂时没想好，但你可以先从当前节点的前置知识开始。");
-    } catch {
-      setMessage("小扑暂时连不上 AI 服务。先看当前节点的前置知识，再做一个小项目验证理解。");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "小扑暂时连不上 AI 服务";
+      setMessage(`${message}。先看当前节点的前置知识，再做一个小项目验证理解。`);
     } finally {
       setLoading(false);
     }
@@ -1171,7 +1172,7 @@ function Assistant({
                   <p className="font-semibold text-muted">安静的知识导航员</p>
                 </div>
               </div>
-              <button onClick={() => setOpen(false)} className="rounded-xl border border-line p-2">
+              <button onClick={() => setOpen(false)} className="rounded-xl border border-line p-2" aria-label="关闭小扑助手">
                 <X className="h-5 w-5" />
               </button>
             </div>
