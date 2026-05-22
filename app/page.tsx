@@ -1950,6 +1950,13 @@ function CommunityPage({
     notify("已发布到本地社区草稿");
   }
 
+  function deletePublishedRoute(title: string) {
+    const next = safePublishedRoutes().filter((item) => item.title !== title);
+    window.localStorage.setItem(PUBLISHED_ROUTES_KEY, JSON.stringify(next));
+    setPublishedRoutes(next);
+    notify("已删除本地发布草稿");
+  }
+
   async function shareRoute(card: CommunityRouteCard) {
     const text = card.builtinRoute
       ? `${card.title}
@@ -2072,6 +2079,11 @@ ${card.builtinRoute.description}
                   <button onClick={() => void shareRoute(card)} title="复制分享" aria-label={`复制分享 ${card.title}`} className="hover:text-brand-500">
                     <Share2 className="h-6 w-6" />
                   </button>
+                  {card.source === "local" && (
+                    <button onClick={() => deletePublishedRoute(card.title)} title="删除发布草稿" aria-label={`删除发布草稿 ${card.title}`} className="hover:text-rose-500">
+                      <Trash2 className="h-6 w-6" />
+                    </button>
+                  )}
                 </div>
               </div>
             </article>
