@@ -2317,15 +2317,21 @@ function AccountSyncPanel({ routes, notify }: { routes: MaopuRoute[]; notify: (m
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm font-black text-brand-500">账号体系</p>
-          <h2 className="mt-2 text-3xl font-black">登录后同步学习地图</h2>
+          <h2 className="mt-2 text-3xl font-black">账号登录与迁移准备</h2>
         </div>
         <span className={`rounded-full px-3 py-2 text-sm font-black ${supabaseReady ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
           {supabaseReady ? "Auth 已就绪" : "待配置"}
         </span>
       </div>
       <p className="mt-4 leading-7 text-muted">
-        当前有 {routeCount} 条路线在本地浏览器里。配置 Supabase 后可以登录账号；路线云端迁移包也已经可以导出，方便下一步接数据库。
+        当前有 {routeCount} 条路线在本地浏览器里。配置 Supabase 后可以登录或注册账号；路线云端迁移包也已经可以导出，方便下一步接数据库。
       </p>
+      {!supabaseReady && (
+        <div className="mt-5 rounded-2xl border border-amber-100 bg-amber-50 p-4 text-sm font-bold leading-6 text-amber-800">
+          当前没有配置 Supabase 环境变量，所以这里不会创建真实账号。需要在 `.env.local` 中配置
+          `NEXT_PUBLIC_SUPABASE_URL` 和 `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`，并重启本地服务后才能调用 Supabase Auth。
+        </div>
+      )}
       {sessionEmail && (
         <div className="mt-5 flex flex-col gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -2391,14 +2397,15 @@ function AccountSyncPanel({ routes, notify }: { routes: MaopuRoute[]; notify: (m
         </label>
         <button
           type="submit"
-          disabled={authLoading}
+          disabled={authLoading || !supabaseReady}
+          title={supabaseReady ? undefined : "请先配置 Supabase 环境变量"}
           className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-brand-500 px-5 py-3 font-black text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <KeyRound className="h-5 w-5" />
-          {authLoading ? "处理中..." : authMode === "login" ? "登录并同步" : "创建账号"}
+          {authLoading ? "处理中..." : !supabaseReady ? "先配置 Supabase" : authMode === "login" ? "登录账号" : "创建账号"}
         </button>
         <p className="mt-3 text-sm font-semibold leading-6 text-muted">
-          配置 Supabase 后会直接调用 Supabase Auth；未配置时只做表单校验和配置提醒。
+          这里只负责 Supabase Auth 登录/注册；路线云端同步还需要接入数据库写入和 RLS 权限规则。
         </p>
       </form>
       <div className="mt-6 grid gap-3">
