@@ -38,11 +38,13 @@ import {
   Layers3,
   Library,
   LockKeyhole,
+  Mail,
   Map as MapIcon,
   MessageCircle,
   PanelRightOpen,
   Pencil,
   Plus,
+  RotateCcw,
   Search,
   Send,
   Share2,
@@ -231,7 +233,44 @@ create table public.route_progress (
   status text not null check (status in ('learned', 'learning', 'unlearned')),
   updated_at timestamptz not null default now(),
   primary key (user_id, route_id, node_id)
-);`;
+);
+
+alter table public.routes enable row level security;
+alter table public.route_favorites enable row level security;
+alter table public.route_progress enable row level security;
+
+drop policy if exists "Users can read own and visible routes" on public.routes;
+create policy "Users can read own and visible routes"
+on public.routes for select
+using (owner_id = auth.uid() or visibility in ('public', 'unlisted'));
+
+drop policy if exists "Users can insert own routes" on public.routes;
+create policy "Users can insert own routes"
+on public.routes for insert
+with check (owner_id = auth.uid());
+
+drop policy if exists "Users can update own routes" on public.routes;
+create policy "Users can update own routes"
+on public.routes for update
+using (owner_id = auth.uid())
+with check (owner_id = auth.uid());
+
+drop policy if exists "Users can delete own routes" on public.routes;
+create policy "Users can delete own routes"
+on public.routes for delete
+using (owner_id = auth.uid());
+
+drop policy if exists "Users can manage own favorites" on public.route_favorites;
+create policy "Users can manage own favorites"
+on public.route_favorites for all
+using (user_id = auth.uid())
+with check (user_id = auth.uid());
+
+drop policy if exists "Users can manage own progress" on public.route_progress;
+create policy "Users can manage own progress"
+on public.route_progress for all
+using (user_id = auth.uid())
+with check (user_id = auth.uid());`;
 
 function createBlankRoute(title = "我的自定义路线"): MaopuRoute {
   return {
@@ -2167,13 +2206,34 @@ ${card.builtinRoute.description}
   );
 }
 
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function explainAuthError(message: string) {
+  const lower = message.toLowerCase();
+  if (lower.includes("invalid login credentials")) return "邮箱或密码不正确";
+  if (lower.includes("email not confirmed")) return "邮箱还没有验证，请先检查验证邮件";
+  if (lower.includes("user already registered") || lower.includes("already registered")) return "这个邮箱已经注册过，可以直接登录或重置密码";
+  if (lower.includes("password")) return "密码不符合要求，请至少使用 6 位字符";
+  if (lower.includes("rate limit") || lower.includes("too many")) return "请求太频繁，请稍后再试";
+  if (lower.includes("signup")) return "注册暂时失败，请检查 Supabase 邮箱注册设置";
+  return message || "账号服务暂时不可用，请稍后再试";
+}
+
 function AccountSyncPanel({ routes, notify }: { routes: MaopuRoute[]; notify: (message: string) => void }) {
   const [authMode, setAuthMode] = useState<AuthMode>("login");
-  const [authDraft, setAuthDraft] = useState({ name: "", email: "", password: "" });
+  const [authDraft, setAuthDraft] = useState({ name: "", email: "", password: "", confirmPassword: "" });
   const [authLoading, setAuthLoading] = useState(false);
+  const [mailLoading, setMailLoading] = useState(false);
   const [sessionEmail, setSessionEmail] = useState("");
+  const [authNotice, setAuthNotice] = useState("");
   const supabaseReady = hasSupabaseBrowserConfig();
   const routeCount = routes.length;
+  const email = authDraft.email.trim().toLowerCase();
+  const passwordReady = authDraft.password.length >= 6;
+  const passwordsMatch = authMode !== "register" || authDraft.password === authDraft.confirmPassword;
+  const canSubmitAuth = supabaseReady && !authLoading && isValidEmail(email) && passwordReady && passwordsMatch && (authMode === "login" || Boolean(authDraft.name.trim()));
   const authTasks = [
     { icon: KeyRound, title: "登录 / 注册", text: "配置 Supabase 后启用邮箱账号、注册确认和会话保持。" },
     { icon: ShieldCheck, title: "权限保护", text: "路线、收藏和学习记录按用户隔离，公开路线再单独发布。" },
@@ -2208,12 +2268,17 @@ function AccountSyncPanel({ routes, notify }: { routes: MaopuRoute[]; notify: (m
 
   function updateAuthDraft(field: keyof typeof authDraft, value: string) {
     setAuthDraft((current) => ({ ...current, [field]: value }));
+    setAuthNotice("");
   }
 
   async function submitAuthPreview(event: FormEvent) {
     event.preventDefault();
-    if (!authDraft.email.trim() || !authDraft.password.trim()) {
+    if (!email || !authDraft.password.trim()) {
       notify("请先填写邮箱和密码");
+      return;
+    }
+    if (!isValidEmail(email)) {
+      notify("邮箱格式不正确");
       return;
     }
     if (authMode === "register" && !authDraft.name.trim()) {
@@ -2224,6 +2289,10 @@ function AccountSyncPanel({ routes, notify }: { routes: MaopuRoute[]; notify: (m
       notify("密码至少 6 位");
       return;
     }
+    if (authMode === "register" && authDraft.password !== authDraft.confirmPassword) {
+      notify("两次输入的密码不一致");
+      return;
+    }
 
     const supabase = getSupabaseBrowserClient();
     if (!supabase) {
@@ -2232,7 +2301,6 @@ function AccountSyncPanel({ routes, notify }: { routes: MaopuRoute[]; notify: (m
     }
 
     setAuthLoading(true);
-    const email = authDraft.email.trim();
     const password = authDraft.password;
     try {
       const result =
@@ -2241,18 +2309,25 @@ function AccountSyncPanel({ routes, notify }: { routes: MaopuRoute[]; notify: (m
           : await supabase.auth.signUp({
               email,
               password,
-              options: { data: { name: authDraft.name.trim() } }
+              options: { data: { name: authDraft.name.trim() }, emailRedirectTo: window.location.origin }
             });
 
       if (result.error) {
-        notify(result.error.message);
+        const message = explainAuthError(result.error.message);
+        setAuthNotice(message);
+        notify(message);
         return;
       }
 
       setSessionEmail(result.data.session?.user.email ?? result.data.user?.email ?? "");
-      notify(authMode === "login" ? "已登录账号" : result.data.session ? "账号已创建并登录" : "账号已创建，请检查邮箱确认");
-    } catch {
-      notify("账号服务暂时不可用，请稍后再试");
+      setAuthDraft((current) => ({ ...current, password: "", confirmPassword: "" }));
+      const message = authMode === "login" ? "已登录账号" : result.data.session ? "账号已创建并登录" : "账号已创建，请检查邮箱完成验证";
+      setAuthNotice(message);
+      notify(message);
+    } catch (error) {
+      const message = error instanceof Error ? explainAuthError(error.message) : "账号服务暂时不可用，请稍后再试";
+      setAuthNotice(message);
+      notify(message);
     } finally {
       setAuthLoading(false);
     }
@@ -2312,6 +2387,72 @@ function AccountSyncPanel({ routes, notify }: { routes: MaopuRoute[]; notify: (m
     }
   }
 
+  async function sendPasswordReset() {
+    if (!email || !isValidEmail(email)) {
+      notify("请先填写有效邮箱");
+      return;
+    }
+
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      notify("请先配置 Supabase URL 和 publishable key");
+      return;
+    }
+
+    try {
+      setMailLoading(true);
+      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
+      if (error) {
+        const message = explainAuthError(error.message);
+        setAuthNotice(message);
+        notify(message);
+        return;
+      }
+      const message = "重置密码邮件已发送，请检查邮箱";
+      setAuthNotice(message);
+      notify(message);
+    } catch (error) {
+      const message = error instanceof Error ? explainAuthError(error.message) : "重置邮件发送失败，请稍后再试";
+      setAuthNotice(message);
+      notify(message);
+    } finally {
+      setMailLoading(false);
+    }
+  }
+
+  async function resendSignupEmail() {
+    if (!email || !isValidEmail(email)) {
+      notify("请先填写有效邮箱");
+      return;
+    }
+
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      notify("请先配置 Supabase URL 和 publishable key");
+      return;
+    }
+
+    try {
+      setMailLoading(true);
+      const { error } = await supabase.auth.resend({ type: "signup", email, options: { emailRedirectTo: window.location.origin } });
+      if (error) {
+        const message = explainAuthError(error.message);
+        setAuthNotice(message);
+        notify(message);
+        return;
+      }
+      const message = "验证邮件已重新发送";
+      setAuthNotice(message);
+      notify(message);
+    } catch (error) {
+      const message = error instanceof Error ? explainAuthError(error.message) : "验证邮件发送失败，请稍后再试";
+      setAuthNotice(message);
+      notify(message);
+    } finally {
+      setMailLoading(false);
+    }
+  }
+
   return (
     <section className="rounded-3xl border border-brand-100 bg-white p-6 shadow-soft sm:p-9">
       <div className="flex items-start justify-between gap-4">
@@ -2357,7 +2498,11 @@ function AccountSyncPanel({ routes, notify }: { routes: MaopuRoute[]; notify: (m
             <button
               key={mode}
               type="button"
-              onClick={() => setAuthMode(mode as AuthMode)}
+              onClick={() => {
+                setAuthMode(mode as AuthMode);
+                setAuthNotice("");
+                setAuthDraft((current) => ({ ...current, password: "", confirmPassword: "" }));
+              }}
               className={`rounded-lg px-4 py-2 font-black transition ${authMode === mode ? "bg-brand-500 text-white" : "text-muted hover:bg-brand-50 hover:text-brand-500"}`}
             >
               {label}
@@ -2395,9 +2540,33 @@ function AccountSyncPanel({ routes, notify }: { routes: MaopuRoute[]; notify: (m
             placeholder="至少 6 位"
           />
         </label>
+        {authMode === "register" && (
+          <label className="mt-4 block">
+            <span className="text-sm font-black">确认密码</span>
+            <input
+              type="password"
+              value={authDraft.confirmPassword}
+              onChange={(event) => updateAuthDraft("confirmPassword", event.target.value)}
+              className="mt-2 w-full rounded-xl border border-line bg-white px-4 py-3 font-semibold outline-none focus:border-brand-500"
+              placeholder="再输入一次密码"
+            />
+          </label>
+        )}
+        <div className="mt-3 rounded-xl bg-white px-4 py-3 text-sm font-bold leading-6 text-muted">
+          {authMode === "register" ? (
+            <>
+              <span className={passwordReady ? "text-emerald-700" : "text-muted"}>密码至少 6 位</span>
+              <span className="px-2">·</span>
+              <span className={passwordsMatch ? "text-emerald-700" : "text-rose-600"}>两次密码一致</span>
+            </>
+          ) : (
+            "忘记密码可以直接向当前邮箱发送重置邮件。"
+          )}
+        </div>
+        {authNotice && <p className="mt-3 rounded-xl bg-white px-4 py-3 text-sm font-bold leading-6 text-brand-500">{authNotice}</p>}
         <button
           type="submit"
-          disabled={authLoading || !supabaseReady}
+          disabled={!canSubmitAuth}
           title={supabaseReady ? undefined : "请先配置 Supabase 环境变量"}
           className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-brand-500 px-5 py-3 font-black text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
         >
@@ -2407,6 +2576,26 @@ function AccountSyncPanel({ routes, notify }: { routes: MaopuRoute[]; notify: (m
         <p className="mt-3 text-sm font-semibold leading-6 text-muted">
           这里只负责 Supabase Auth 登录/注册；路线云端同步还需要接入数据库写入和 RLS 权限规则。
         </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => void sendPasswordReset()}
+            disabled={!supabaseReady || mailLoading || !isValidEmail(email)}
+            className="flex items-center justify-center gap-2 rounded-xl border border-line bg-white px-4 py-3 font-black text-muted transition hover:border-brand-500 hover:text-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <RotateCcw className="h-4 w-4" />
+            重置密码
+          </button>
+          <button
+            type="button"
+            onClick={() => void resendSignupEmail()}
+            disabled={!supabaseReady || mailLoading || !isValidEmail(email)}
+            className="flex items-center justify-center gap-2 rounded-xl border border-line bg-white px-4 py-3 font-black text-muted transition hover:border-brand-500 hover:text-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Mail className="h-4 w-4" />
+            重发验证邮件
+          </button>
+        </div>
       </form>
       <div className="mt-6 grid gap-3">
         {authTasks.map(({ icon: Icon, title, text }) => (

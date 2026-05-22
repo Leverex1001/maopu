@@ -51,6 +51,7 @@
 - 视图切换会自动回到页面顶部，避免从首页生成路线后地图页继承旧滚动位置导致画布半屏或黑屏。
 - 我的学习页新增账号与云同步入口，提供登录/注册、权限保护和本地路线迁移的产品位置。
 - 账号入口已接入 Supabase Auth 浏览器客户端；配置公开环境变量后可用邮箱登录/注册，未配置时会禁用创建账号并给出明确提醒。
+- 邮箱注册/登录补充了邮箱格式校验、注册确认密码、错误中文提示、重发验证邮件和重置密码邮件。
 - 账号入口支持导出本地路线迁移包，并可复制 Supabase 建表 SQL，便于后续把 localStorage 数据迁移到云端。
 - 项目已加入 `@supabase/supabase-js` 依赖，方便下一步把路线表和 RLS 同步接入到现有前端入口。
 - 我的学习页新增产品自检面板，汇总本地路线、本地发布、Supabase 环境变量和平均路线质量，方便部署前检查。
@@ -218,11 +219,48 @@ create table public.route_progress (
   updated_at timestamptz not null default now(),
   primary key (user_id, route_id, node_id)
 );
+
+alter table public.routes enable row level security;
+alter table public.route_favorites enable row level security;
+alter table public.route_progress enable row level security;
+
+drop policy if exists "Users can read own and visible routes" on public.routes;
+create policy "Users can read own and visible routes"
+on public.routes for select
+using (owner_id = auth.uid() or visibility in ('public', 'unlisted'));
+
+drop policy if exists "Users can insert own routes" on public.routes;
+create policy "Users can insert own routes"
+on public.routes for insert
+with check (owner_id = auth.uid());
+
+drop policy if exists "Users can update own routes" on public.routes;
+create policy "Users can update own routes"
+on public.routes for update
+using (owner_id = auth.uid())
+with check (owner_id = auth.uid());
+
+drop policy if exists "Users can delete own routes" on public.routes;
+create policy "Users can delete own routes"
+on public.routes for delete
+using (owner_id = auth.uid());
+
+drop policy if exists "Users can manage own favorites" on public.route_favorites;
+create policy "Users can manage own favorites"
+on public.route_favorites for all
+using (user_id = auth.uid())
+with check (user_id = auth.uid());
+
+drop policy if exists "Users can manage own progress" on public.route_progress;
+create policy "Users can manage own progress"
+on public.route_progress for all
+using (user_id = auth.uid())
+with check (user_id = auth.uid());
 ```
 
 RLS 方向：
 
-- `routes` 私有记录只能 owner 读写，`public` / `unlisted` 可以公开读。
+- 上面的复制版 SQL 已直接启用 RLS，并限制 `routes` 私有记录只能 owner 读写，`public` / `unlisted` 可以公开读。
 - `route_favorites` 和 `route_progress` 只能当前登录用户读写自己的记录。
 - 服务端生成短分享链接时只暴露 `routes.id` 或单独的 `share_slug`，不再把完整路线塞进 URL hash。
 
