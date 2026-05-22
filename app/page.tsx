@@ -57,6 +57,7 @@ import {
   defaultRoute,
   Domain,
   domainStyles,
+  KnowledgeEdge,
   KnowledgeNode,
   LearningStatus,
   routeForGoal,
@@ -213,12 +214,101 @@ function decodeSharedRoute(hash: string): MaopuRoute | null {
   try {
     const text = decompressFromEncodedURIComponent(payload);
     if (!text) return null;
-    const route = JSON.parse(text) as Partial<MaopuRoute>;
-    if (!route.title || !Array.isArray(route.nodes) || !Array.isArray(route.edges)) return null;
-    return route as MaopuRoute;
+    return normalizeImportedRoute(JSON.parse(text));
   } catch {
     return null;
   }
+}
+
+function normalizeImportedRoute(value: unknown): MaopuRoute | null {
+  if (!value || typeof value !== "object") return null;
+
+  const route = value as Partial<MaopuRoute>;
+  if (!route.title || !Array.isArray(route.nodes) || !Array.isArray(route.edges)) return null;
+
+  const rawNodes = route.nodes
+    .map((node, index) => normalizeImportedNode(node, index))
+    .filter((node): node is KnowledgeNode => Boolean(node));
+  if (!rawNodes.length) return null;
+
+  const idMap = new Map<string, string>();
+  const seenIds = new Set<string>();
+  const nodes = rawNodes.map((node, index) => {
+    const baseId = node.id || `imported-node-${index + 1}`;
+    const uniqueId = seenIds.has(baseId) ? `${baseId}-${index + 1}` : baseId;
+    seenIds.add(uniqueId);
+    idMap.set(baseId, uniqueId);
+    return { ...node, id: uniqueId };
+  });
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  const edges = route.edges
+    .map((edge, index) => normalizeImportedEdge(edge, index))
+    .map((edge) => (edge ? { ...edge, source: idMap.get(edge.source) ?? edge.source, target: idMap.get(edge.target) ?? edge.target } : null))
+    .filter((edge): edge is KnowledgeEdge => Boolean(edge && nodeIds.has(edge.source) && nodeIds.has(edge.target)));
+
+  return {
+    ...defaultRoute,
+    title: String(route.title).trim() || "导入路线",
+    description: String(route.description || "从外部 JSON 导入的学习路线。"),
+    summary: String(route.summary || `已导入 ${nodes.length} 个知识节点。`),
+    domains: { ...defaultRoute.domains, ...(route.domains ?? {}) },
+    nodes,
+    edges
+  };
+}
+
+function normalizeImportedNode(value: unknown, index: number): KnowledgeNode | null {
+  if (!value || typeof value !== "object") return null;
+
+  const node = value as Partial<KnowledgeNode>;
+  const template = defaultRoute.nodes[index % defaultRoute.nodes.length];
+  const title = String(node.title || template.title).trim();
+  if (!title) return null;
+
+  return {
+    ...template,
+    id: String(node.id || `imported-node-${index + 1}`).trim() || `imported-node-${index + 1}`,
+    title,
+    domain: isDomainValue(node.domain) ? node.domain : template.domain,
+    core: typeof node.core === "boolean" ? node.core : template.core,
+    status: isLearningStatusValue(node.status) ? node.status : "unlearned",
+    position: {
+      x: Number.isFinite(node.position?.x) ? Number(node.position?.x) : 120 + Math.floor(index / 3) * 300,
+      y: Number.isFinite(node.position?.y) ? Number(node.position?.y) : 80 + (index % 3) * 220
+    },
+    why: String(node.why || template.why),
+    problems: normalizeStringList(node.problems, template.problems),
+    prerequisites: normalizeStringList(node.prerequisites, template.prerequisites),
+    path: normalizeStringList(node.path, template.path),
+    projects: normalizeStringList(node.projects, template.projects),
+    resources: normalizeStringList(node.resources, template.resources)
+  };
+}
+
+function normalizeImportedEdge(value: unknown, index: number): KnowledgeEdge | null {
+  if (!value || typeof value !== "object") return null;
+
+  const edge = value as Partial<KnowledgeEdge>;
+  if (!edge.source || !edge.target) return null;
+
+  return {
+    id: String(edge.id || `imported-edge-${index + 1}`),
+    source: String(edge.source),
+    target: String(edge.target),
+    kind: edge.kind === "related" ? "related" : "dependency"
+  };
+}
+
+function normalizeStringList(value: unknown, fallback: string[]) {
+  return Array.isArray(value) ? value.map(String).map((item) => item.trim()).filter(Boolean) : fallback;
+}
+
+function isDomainValue(value: unknown): value is Domain {
+  return typeof value === "string" && value in defaultRoute.domains;
+}
+
+function isLearningStatusValue(value: unknown): value is LearningStatus {
+  return value === "learned" || value === "learning" || value === "unlearned";
 }
 
 function downloadText(filename: string, content: string, type = "text/plain;charset=utf-8") {
@@ -1338,10 +1428,10 @@ function UploadPage({
       if (file.name.toLowerCase().endsWith(".json")) {
         const text = await file.text();
         const trimmed = text.trim();
-        const parsed = JSON.parse(trimmed) as Partial<MaopuRoute>;
-        if (parsed.title && Array.isArray(parsed.nodes) && Array.isArray(parsed.edges)) {
-          onImportRoute(parsed as MaopuRoute);
+        const parsed = normalizeImportedRoute(JSON.parse(trimmed));
+        if (parsed) {
           notify("已导入 JSON 路线");
+          onImportRoute(parsed);
           return;
         }
       }
@@ -1835,9 +1925,10 @@ export default function HomePage() {
   }
 
   function importRoute(nextRoute: MaopuRoute) {
-    setRoute(nextRoute);
+    const normalizedRoute = normalizeImportedRoute(nextRoute) ?? nextRoute;
+    setRoute(normalizedRoute);
     setSelectedNode(null);
-    saveRoute(nextRoute);
+    saveRoute(normalizedRoute);
     setView("map");
   }
 
