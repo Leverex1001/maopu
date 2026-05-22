@@ -233,6 +233,15 @@ function downloadText(filename: string, content: string, type = "text/plain;char
   URL.revokeObjectURL(url);
 }
 
+async function readApiError(response: Response, fallback: string) {
+  try {
+    const payload = (await response.json()) as { error?: string; message?: string };
+    return payload.message || payload.error || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 function routeToMarkdown(route: MaopuRoute) {
   const nodeSections = route.nodes
     .map(
@@ -1343,16 +1352,17 @@ function UploadPage({
         method: "POST",
         body: form
       });
-      if (!response.ok) throw new Error("Parse failed");
+      if (!response.ok) throw new Error(await readApiError(response, "资料解析失败"));
       const parsed = (await response.json()) as { text: string; summary: string; sourceName: string; sourceType: string };
       setSourceText(parsed.text);
       setParseSummary(parsed.summary);
       notify(`已解析 ${parsed.sourceName}`);
-    } catch {
+    } catch (error) {
       const fallback = `我上传了 ${file.name}，文件大小约 ${Math.round(file.size / 1024)}KB。请根据文件主题为我规划学习路线。`;
       setSourceText(fallback);
-      setParseSummary("解析失败，已保留文件名和大小作为路线生成线索。");
-      notify("文件无法直接读取，已使用文件信息生成提示");
+      const message = error instanceof Error ? error.message : "解析失败";
+      setParseSummary(`${message}，已保留文件名和大小作为路线生成线索。`);
+      notify("文件未完整解析，已保留文件信息");
     } finally {
       setParsing(false);
     }
@@ -1372,15 +1382,16 @@ function UploadPage({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url })
       });
-      if (!response.ok) throw new Error("URL parse failed");
+      if (!response.ok) throw new Error(await readApiError(response, "链接解析失败"));
       const parsed = (await response.json()) as { text: string; summary: string; sourceName: string };
       setSourceText((current) => [current.trim(), parsed.text].filter(Boolean).join("\n\n"));
       setParseSummary(parsed.summary);
       notify(`已解析 ${parsed.sourceName}`);
-    } catch {
+    } catch (error) {
       setSourceText((current) => [current.trim(), `链接：${url}\n请根据该链接代表的项目或资料规划学习路线。`].filter(Boolean).join("\n\n"));
-      setParseSummary("链接抓取失败，已把链接本身加入资料。");
-      notify("链接无法抓取，已保留链接作为线索");
+      const message = error instanceof Error ? error.message : "链接抓取失败";
+      setParseSummary(`${message}，已把链接本身加入资料。`);
+      notify("链接未完整解析，已保留链接作为线索");
     } finally {
       setParsing(false);
     }
@@ -1972,14 +1983,15 @@ export default function HomePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ goal: plannedGoal })
       });
-      if (!response.ok) throw new Error("Route generation failed");
+      if (!response.ok) throw new Error(await readApiError(response, "AI 路线生成暂不可用"));
       const data = (await response.json()) as MaopuRoute;
       setRoute(data);
       saveRoute(data);
-    } catch {
+    } catch (error) {
       const fallback = routeForGoal(plannedGoal);
       setRoute(fallback);
       saveRoute(fallback);
+      notify(`${error instanceof Error ? error.message : "AI 路线生成暂不可用"}，已使用本地路线`);
     } finally {
       window.setTimeout(() => {
         setGenerating(false);
@@ -2002,12 +2014,12 @@ export default function HomePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ input: text })
       });
-      if (!response.ok) throw new Error("Recognition failed");
+      if (!response.ok) throw new Error(await readApiError(response, "AI 识别暂不可用"));
       const data = (await response.json()) as RecognitionResult;
       setRecognition(data);
       setGoal(data.prompt);
       notify("已识别学习需求");
-    } catch {
+    } catch (error) {
       setRecognition({
         goal: text.length <= 28 ? text : "围绕你的描述规划学习路线",
         profile: "当前基础未明确，需要先识别前置知识并逐步推进。",
@@ -2015,7 +2027,7 @@ export default function HomePage() {
         keywords: ["基础", "核心概念", "项目练习", "路线规划"],
         prompt: text
       });
-      notify("已使用本地规则识别");
+      notify(`${error instanceof Error ? error.message : "AI 识别暂不可用"}，已使用本地规则`);
     } finally {
       setRecognizing(false);
     }

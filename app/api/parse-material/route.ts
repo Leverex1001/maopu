@@ -58,6 +58,7 @@ export async function POST(request: Request) {
     }
 
     if (body.text?.trim()) {
+      assertTextSize(body.text);
       return NextResponse.json(parsePlainText(body.text, "粘贴资料"));
     }
 
@@ -194,6 +195,13 @@ function assertUrlSize(response: Response) {
   const contentLength = Number.parseInt(response.headers.get("content-length") ?? "", 10);
   if (!Number.isFinite(contentLength) || contentLength <= maxBytes) return;
   throw new MaterialParseError(`网页内容超过 ${formatMb(maxBytes)}MB，请改用摘要或核心片段。`, 413);
+}
+
+function assertTextSize(text: string) {
+  const maxBytes = readByteLimit("MATERIAL_MAX_TEXT_MB", 1);
+  const bytes = Buffer.byteLength(text, "utf8");
+  if (bytes <= maxBytes) return;
+  throw new MaterialParseError(`粘贴内容超过 ${formatMb(maxBytes)}MB，请截取最关键的部分。`, 413);
 }
 
 function readByteLimit(name: string, fallbackMb: number) {

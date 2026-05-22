@@ -23,6 +23,7 @@
 - 调用 OpenAI-compatible `chat/completions` API，默认使用 `deepseek-chat`。
 - 服务端根据 AI 大纲组装完整知识地图。
 - AI 失败、未配置 key 或输出不合格时自动 fallback 到本地路线。
+- AI 接口超限、网络失败或服务端异常时，前端会展示具体原因并自动使用本地路线兜底。
 
 ### 知识地图
 
@@ -80,6 +81,7 @@
   - 导入符合结构的 JSON 路线
   - 粘贴资料内容或网页链接生成路线
   - GitHub 链接抓取 README 和目录结构
+- 上传或链接解析失败时，会展示服务端返回的具体原因，并保留文件名、大小或链接作为路线生成线索。
 
 ### 社区和我的学习
 
@@ -128,12 +130,12 @@
 ### 文件解析
 
 - PDF、Excel 和 GitHub README/目录已经有第一版解析，但还需要更强的结构化抽取和错误处理。
-- 资料上传默认限制单文件 8MB，普通网页抓取默认限制 2MB，可用 `MATERIAL_MAX_FILE_MB` 和 `MATERIAL_MAX_URL_MB` 调整。
+- 资料上传默认限制单文件 8MB，普通网页抓取默认限制 2MB，粘贴文本默认限制 1MB，可用 `MATERIAL_MAX_FILE_MB`、`MATERIAL_MAX_URL_MB`、`MATERIAL_MAX_TEXT_MB` 调整。
 - 图片 OCR 和截图识别还没有实现。
 
 ### 工程化
 
-- 还没有 API 限流，公开部署后可能消耗 DeepSeek API 额度。
+- 当前限流是单实例内存限流；多实例部署时还需要接入 Redis / Upstash 之类的共享限流存储。
 - 还没有服务端日志面板和调用统计。
 - 还没有端到端测试。
 - 国内访问 Vercel 可能不稳定，正式给国内用户使用需要考虑国内部署。
@@ -198,6 +200,7 @@ AI_RATE_LIMIT_RECOGNIZE=30
 AI_RATE_LIMIT_ASSISTANT=60
 MATERIAL_MAX_FILE_MB=8
 MATERIAL_MAX_URL_MB=2
+MATERIAL_MAX_TEXT_MB=1
 ```
 
 启动开发服务器：
@@ -226,6 +229,7 @@ AI_RATE_LIMIT_RECOGNIZE=30
 AI_RATE_LIMIT_ASSISTANT=60
 MATERIAL_MAX_FILE_MB=8
 MATERIAL_MAX_URL_MB=2
+MATERIAL_MAX_TEXT_MB=1
 ```
 
 不要把真实 API key 写入源码、README、前端代码或 GitHub commit。
