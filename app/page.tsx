@@ -393,6 +393,26 @@ function normalizeImportedRoute(value: unknown): MaopuRoute | null {
   };
 }
 
+function normalizeImportedRoutePack(value: unknown): MaopuRoute[] {
+  const rawRoutes =
+    Array.isArray(value)
+      ? value
+      : value && typeof value === "object" && Array.isArray((value as { routes?: unknown[] }).routes)
+        ? (value as { routes: unknown[] }).routes
+        : [];
+
+  const seen = new Set<string>();
+  return rawRoutes
+    .map((item) => normalizeImportedRoute(item))
+    .filter((route): route is MaopuRoute => Boolean(route))
+    .filter((route) => {
+      const id = routeStorageId(route);
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+}
+
 function normalizeImportedNode(value: unknown, index: number): KnowledgeNode | null {
   if (!value || typeof value !== "object") return null;
 
@@ -1076,10 +1096,12 @@ function CoursePanel({
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<KnowledgeNode | null>(node);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   useEffect(() => {
     setDraft(node);
     setEditing(false);
+    setConfirmingDelete(false);
   }, [node]);
 
   function updateDraft(partial: Partial<KnowledgeNode>) {
@@ -1092,16 +1114,28 @@ function CoursePanel({
     if (!title) return;
     onUpdate({ ...draft, title });
     setEditing(false);
+    setConfirmingDelete(false);
   }
 
   function toggleEditing() {
     if (editing) {
       setDraft(node);
       setEditing(false);
+      setConfirmingDelete(false);
       return;
     }
 
     setEditing(true);
+    setConfirmingDelete(false);
+  }
+
+  function requestDeleteNode() {
+    if (!confirmingDelete) {
+      setConfirmingDelete(true);
+      return;
+    }
+
+    onDelete(node!.id);
   }
 
   return (
@@ -1197,11 +1231,13 @@ function CoursePanel({
                   </OutlineButton>
                 </div>
                 <button
-                  onClick={() => onDelete(node.id)}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 font-black text-red-600"
+                  onClick={requestDeleteNode}
+                  className={`flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-3 font-black ${
+                    confirmingDelete ? "border-red-500 bg-red-600 text-white" : "border-red-200 bg-red-50 text-red-600"
+                  }`}
                 >
                   <Trash2 className="h-5 w-5" />
-                  删除节点
+                  {confirmingDelete ? "再次点击确认删除" : "删除节点"}
                 </button>
               </div>
             ) : (
@@ -1678,10 +1714,27 @@ function UploadPage({
       if (file.name.toLowerCase().endsWith(".json")) {
         const text = await file.text();
         const trimmed = text.trim();
-        const parsed = normalizeImportedRoute(JSON.parse(trimmed));
+        const rawJson = JSON.parse(trimmed);
+        const parsed = normalizeImportedRoute(rawJson);
         if (parsed) {
           notify("已导入 JSON 路线");
           onImportRoute(parsed);
+          return;
+        }
+
+        const routePack = normalizeImportedRoutePack(rawJson);
+        if (routePack.length) {
+          const savedRoutes = safeSavedRoutes();
+          const seenIds = new Set<string>();
+          const mergedRoutes = [...routePack, ...savedRoutes].filter((item) => {
+            const id = routeStorageId(item);
+            if (seenIds.has(id)) return false;
+            seenIds.add(id);
+            return true;
+          }).slice(0, 12);
+          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(mergedRoutes));
+          notify(`已导入 ${routePack.length} 条迁移路线`);
+          onImportRoute(routePack[0]);
           return;
         }
       }
@@ -2344,6 +2397,7 @@ function UniversePage({
 }) {
   const [savedRoutes, setSavedRoutes] = useState<MaopuRoute[]>([]);
   const [publishedCount, setPublishedCount] = useState(0);
+  const [pendingDeleteRouteId, setPendingDeleteRouteId] = useState("");
 
   useEffect(() => {
     setSavedRoutes(safeSavedRoutes());
@@ -2358,9 +2412,17 @@ function UniversePage({
   const recentNodes = routes[0]?.nodes.filter((node) => node.status !== "unlearned").slice(0, 4) ?? [];
 
   function deleteSavedRoute(route: MaopuRoute) {
+    const deleteId = routeStorageId(route);
+    if (pendingDeleteRouteId !== deleteId) {
+      setPendingDeleteRouteId(deleteId);
+      notify("再次点击删除按钮确认删除路线");
+      return;
+    }
+
     const next = safeSavedRoutes().filter((item) => routeStorageId(item) !== routeStorageId(route) && item.title !== route.title);
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     setSavedRoutes(next);
+    setPendingDeleteRouteId("");
     notify("已删除本地路线");
   }
 
@@ -2388,6 +2450,7 @@ function UniversePage({
               const progress = calculateProgress(item);
               const status = progress >= 100 ? "已完成" : progress > 0 ? "学习中" : "未开始";
               const color = progress >= 100 ? "bg-emerald-100 text-emerald-600" : progress > 0 ? "bg-amber-100 text-amber-600" : "bg-brand-50 text-brand-500";
+              const deletePending = pendingDeleteRouteId === routeStorageId(item);
               return (
                 <div key={`${item.title}-${index}`} className="flex flex-wrap items-center gap-4 border-b border-line py-6 sm:flex-nowrap sm:gap-5 sm:py-8">
                   <button onClick={() => onOpenRoute(item)} className={`grid h-16 w-16 place-items-center rounded-2xl ${color}`} aria-label={`打开路线 ${item.title}`}>
@@ -2398,7 +2461,14 @@ function UniversePage({
                     <p className="mt-2 text-lg text-muted">{status} · {item.nodes.length} 节点</p>
                   </button>
                   <span className="font-bold text-brand-500">{progress}%</span>
-                  <button onClick={() => deleteSavedRoute(item)} className="rounded-xl border border-line p-2 text-muted hover:text-rose-500" title="删除路线" aria-label={`删除路线 ${item.title}`}>
+                  <button
+                    onClick={() => deleteSavedRoute(item)}
+                    className={`rounded-xl border p-2 ${
+                      deletePending ? "border-rose-500 bg-rose-50 text-rose-600" : "border-line text-muted hover:text-rose-500"
+                    }`}
+                    title={deletePending ? "再次点击确认删除" : "删除路线"}
+                    aria-label={`${deletePending ? "确认删除路线" : "删除路线"} ${item.title}`}
+                  >
                     <Trash2 className="h-5 w-5" />
                   </button>
                   <button onClick={() => onOpenRoute(item)} className="rounded-xl border border-line p-2 text-muted hover:text-brand-500" title="打开路线" aria-label={`打开路线 ${item.title}`}>
