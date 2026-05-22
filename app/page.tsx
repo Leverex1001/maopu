@@ -93,6 +93,8 @@ type CommunityRouteCard = {
   categories: string[];
   prompt: string;
   builtinRoute?: MaopuRoute;
+  source?: "builtin" | "local";
+  visibility?: "private" | "public" | "unlisted";
 };
 
 type MapSidebarItem = {
@@ -119,6 +121,7 @@ type RouteHealth = {
 const STORAGE_KEY = "maopu.savedRoutes.v1";
 const FAVORITES_KEY = "maopu.favoriteCommunityRoutes.v1";
 const MASCOT_STYLE_KEY = "maopu.mascotStyle.v1";
+const PUBLISHED_ROUTES_KEY = "maopu.publishedRoutes.v1";
 
 const routeCards: CommunityRouteCard[] = [
   {
@@ -321,6 +324,17 @@ function safeSavedRoutes(): MaopuRoute[] {
     return saved ? (JSON.parse(saved) as MaopuRoute[]) : [];
   } catch {
     window.localStorage.removeItem(STORAGE_KEY);
+    return [];
+  }
+}
+
+function safePublishedRoutes(): MaopuRoute[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const saved = window.localStorage.getItem(PUBLISHED_ROUTES_KEY);
+    return saved ? (JSON.parse(saved) as MaopuRoute[]) : [];
+  } catch {
+    window.localStorage.removeItem(PUBLISHED_ROUTES_KEY);
     return [];
   }
 }
@@ -1840,17 +1854,22 @@ function UploadPage({
 }
 
 function CommunityPage({
+  currentRoute,
   onGenerate,
   onLoadBuiltin,
   notify,
   setView
 }: {
+  currentRoute: MaopuRoute;
   onGenerate: (goal: string) => void;
   onLoadBuiltin: (route: MaopuRoute) => void;
   notify: (message: string) => void;
   setView: (view: View) => void;
 }) {
   const [activeTab, setActiveTab] = useState("热门");
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [publishVisibility, setPublishVisibility] = useState<"private" | "public" | "unlisted">("unlisted");
+  const [publishedRoutes, setPublishedRoutes] = useState<MaopuRoute[]>([]);
   const [favorites, setFavorites] = useState<string[]>(() => {
     if (typeof window === "undefined") return [];
     try {
@@ -1859,9 +1878,31 @@ function CommunityPage({
       return [];
     }
   });
-  const tabs = ["热门", "精选", "最新", "考研", "就业", "AI", "游戏开发", "CS 基础", "收藏"];
+  useEffect(() => {
+    setPublishedRoutes(safePublishedRoutes());
+  }, []);
+
+  const publishedCards: CommunityRouteCard[] = publishedRoutes.map((item) => ({
+    title: item.title,
+    author: publishVisibilityLabel((item as MaopuRoute & { visibility?: CommunityRouteCard["visibility"] }).visibility ?? "unlisted"),
+    rating: "本地",
+    learners: `${item.nodes.length} 节点`,
+    categories: ["我的发布", "最新", "收藏"],
+    prompt: "",
+    builtinRoute: item,
+    source: "local",
+    visibility: (item as MaopuRoute & { visibility?: CommunityRouteCard["visibility"] }).visibility ?? "unlisted"
+  }));
+  const allCards = [...publishedCards, ...routeCards.map((card) => ({ ...card, source: "builtin" as const }))];
+  const tabs = ["热门", "精选", "最新", "我的发布", "考研", "就业", "AI", "游戏开发", "CS 基础", "收藏"];
   const filteredCards =
-    activeTab === "收藏" ? routeCards.filter((card) => favorites.includes(card.title)) : routeCards.filter((card) => card.categories.includes(activeTab));
+    activeTab === "收藏" ? allCards.filter((card) => favorites.includes(card.title)) : allCards.filter((card) => card.categories.includes(activeTab));
+
+  function publishVisibilityLabel(visibility: CommunityRouteCard["visibility"]) {
+    if (visibility === "public") return "我发布 · 公开";
+    if (visibility === "private") return "我发布 · 私有草稿";
+    return "我发布 · 链接可见";
+  }
 
   function toggleFavorite(title: string) {
     setFavorites((current) => {
@@ -1886,6 +1927,27 @@ function CommunityPage({
     }
 
     onGenerate(`Fork 并定制这条路线：${card.prompt}`);
+  }
+
+  function publishCurrentRoute() {
+    if (!currentRoute.nodes.length) {
+      notify("当前路线还没有节点，先生成或添加节点");
+      setView("map");
+      return;
+    }
+
+    const routeForPublish = {
+      ...currentRoute,
+      title: currentRoute.title,
+      summary: `${currentRoute.summary} 已保存为本地社区发布草稿。`,
+      visibility: publishVisibility
+    } as MaopuRoute & { visibility: "private" | "public" | "unlisted" };
+    const next = [routeForPublish, ...safePublishedRoutes().filter((item) => item.title !== routeForPublish.title)].slice(0, 12);
+    window.localStorage.setItem(PUBLISHED_ROUTES_KEY, JSON.stringify(next));
+    setPublishedRoutes(next);
+    setActiveTab("我的发布");
+    setPublishOpen(false);
+    notify("已发布到本地社区草稿");
   }
 
   async function shareRoute(card: CommunityRouteCard) {
@@ -1918,8 +1980,47 @@ ${card.builtinRoute.description}
               </button>
             ))}
           </div>
-          <PrimaryButton onClick={() => setView("landing")}>创建路线</PrimaryButton>
+          <div className="flex flex-wrap gap-3">
+            <OutlineButton onClick={() => setPublishOpen((value) => !value)}>发布当前路线</OutlineButton>
+            <PrimaryButton onClick={() => setView("landing")}>创建路线</PrimaryButton>
+          </div>
         </div>
+        {publishOpen && (
+          <section className="mb-8 rounded-3xl border border-brand-100 bg-white p-6 shadow-soft">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-black text-brand-500">本地社区发布</p>
+                <h2 className="mt-2 text-3xl font-black">{currentRoute.title}</h2>
+                <p className="mt-3 max-w-3xl leading-7 text-muted">
+                  先把当前路线发布到本地社区草稿。接入 Supabase 后，这里会写入 `routes.visibility` 并生成真实公开页。
+                </p>
+              </div>
+              <span className="rounded-full bg-brand-50 px-3 py-2 text-sm font-black text-brand-500">{currentRoute.nodes.length} 节点</span>
+            </div>
+            <div className="mt-5 flex flex-wrap gap-3">
+              {[
+                ["unlisted", "链接可见"],
+                ["public", "公开"],
+                ["private", "私有草稿"]
+              ].map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setPublishVisibility(value as "private" | "public" | "unlisted")}
+                  className={`rounded-xl border px-4 py-3 font-black ${
+                    publishVisibility === value ? "border-brand-500 bg-brand-50 text-brand-500" : "border-line text-muted hover:border-brand-500 hover:text-brand-500"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="mt-5 flex flex-wrap gap-3">
+              <PrimaryButton onClick={publishCurrentRoute}>保存发布草稿</PrimaryButton>
+              <OutlineButton onClick={() => setPublishOpen(false)}>取消</OutlineButton>
+            </div>
+          </section>
+        )}
         {filteredCards.length === 0 ? (
           <div className="rounded-3xl border border-line bg-white p-12 text-center shadow-soft">
             <Library className="mx-auto h-10 w-10 text-brand-500" />
@@ -1934,7 +2035,9 @@ ${card.builtinRoute.description}
                 <div className="flex items-start gap-3">
                   <h2 className="text-3xl font-black leading-tight">{card.title}</h2>
                   {card.builtinRoute && (
-                    <span className="mt-1 shrink-0 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-black text-brand-500 border border-brand-100">精选</span>
+                    <span className="mt-1 shrink-0 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-black text-brand-500 border border-brand-100">
+                      {card.source === "local" ? "本地" : "精选"}
+                    </span>
                   )}
                 </div>
                 <p className="mt-8 min-h-24 text-lg leading-7 text-muted">
@@ -2594,6 +2697,7 @@ export default function HomePage() {
   if (view === "community") {
     return withToasts(
       <CommunityPage
+        currentRoute={route}
         onGenerate={generateRoute}
         onLoadBuiltin={(builtinRoute) => { importRoute(builtinRoute); setView("map"); }}
         notify={notify}
