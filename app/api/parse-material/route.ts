@@ -85,8 +85,12 @@ async function parseFile(file: File): Promise<ParseMaterialResponse> {
     return parsePdf(buffer, name);
   }
 
-  if (["xlsx", "xls"].includes(extension)) {
+  if (extension === "xlsx") {
     return parseWorkbook(buffer, name);
+  }
+
+  if (extension === "xls") {
+    throw new MaterialParseError("旧版 .xls 格式暂不解析，请另存为 .xlsx、CSV 或 TSV 后再上传。", 415);
   }
 
   if (["txt", "md", "markdown", "csv", "tsv", "json"].includes(extension) || file.type.startsWith("text/")) {
@@ -121,21 +125,28 @@ async function parsePdf(buffer: Buffer, sourceName: string): Promise<ParseMateri
 }
 
 async function parseWorkbook(buffer: Buffer, sourceName: string): Promise<ParseMaterialResponse> {
-  const XLSX = await import("xlsx");
-  const workbook = XLSX.read(buffer, { type: "buffer" });
-  const sections = workbook.SheetNames.slice(0, 6).map((sheetName) => {
-    const sheet = workbook.Sheets[sheetName];
-    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" }).slice(0, 80);
-    const csv = XLSX.utils.sheet_to_csv(sheet).split("\n").slice(0, 120).join("\n");
-    return [`# Sheet: ${sheetName}`, rows.length ? JSON.stringify(rows.slice(0, 20), null, 2) : csv].join("\n");
+  const { default: readXlsxFile } = await import("read-excel-file/universal");
+  const input = new ArrayBuffer(buffer.byteLength);
+  new Uint8Array(input).set(buffer);
+  const sheets = await readXlsxFile(input);
+  const sections = sheets.slice(0, 6).map(({ sheet, data }) => {
+    const rows = data.slice(0, 80);
+    const table = rows
+      .map((row) =>
+        row
+          .map((cell) => (cell instanceof Date ? cell.toISOString().slice(0, 10) : String(cell ?? "")))
+          .join(" | ")
+      )
+      .join("\n");
+    return [`# Sheet: ${sheet}`, table].join("\n");
   });
   const text = normalizeText(sections.join("\n\n")).slice(0, 16000);
   return {
     sourceName,
     sourceType: "excel",
-    text,
-    summary: `已解析 ${workbook.SheetNames.length} 个工作表，抽取前 ${Math.min(workbook.SheetNames.length, 6)} 个工作表的课程/表格内容。`,
-    meta: { sheets: workbook.SheetNames }
+    text: text || "未从 Excel 中读取到文本内容。",
+    summary: `已解析 ${sheets.length} 个工作表，抽取前 ${Math.min(sheets.length, 6)} 个工作表的课程/表格内容。`,
+    meta: { sheets: sheets.map(({ sheet }) => sheet) }
   };
 }
 

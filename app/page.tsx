@@ -65,6 +65,7 @@ import {
   routeForGoal,
   Route as MaopuRoute
 } from "@/lib/route-data";
+import { getSupabaseBrowserClient, hasSupabaseBrowserConfig } from "@/lib/supabase-client";
 
 type View = "landing" | "map" | "upload" | "community" | "universe";
 
@@ -1825,7 +1826,7 @@ function UploadPage({
             ref={fileInputRef}
             type="file"
             className="hidden"
-            accept=".txt,.md,.markdown,.json,.csv,.tsv,.pdf,.xlsx,.xls"
+            accept=".txt,.md,.markdown,.json,.csv,.tsv,.pdf,.xlsx"
             onChange={(event) => {
               const file = event.target.files?.[0];
               if (file) void handleFile(file);
@@ -1848,7 +1849,7 @@ function UploadPage({
                 <UploadCloud className="h-10 w-10 sm:h-12 sm:w-12" />
               </span>
               <h2 className="mt-6 text-2xl font-black sm:mt-7 sm:text-4xl">选择或拖入学习资料</h2>
-              <p className="mt-3 text-base leading-7 text-muted sm:mt-4 sm:text-xl">支持 Markdown / JSON 路线 / CSV / 文本 / PDF / Excel，解析后可直接生成路线</p>
+              <p className="mt-3 text-base leading-7 text-muted sm:mt-4 sm:text-xl">支持 Markdown / JSON 路线 / CSV / 文本 / PDF / XLSX，解析后可直接生成路线</p>
               <span className="mt-6 inline-flex rounded-xl bg-gradient-to-r from-brand-500 to-violet-500 px-6 py-3 font-bold text-white shadow-soft sm:mt-8 sm:px-7 sm:py-4">
                 {parsing ? "正在读取..." : fileName || "选择文件"}
               </span>
@@ -1907,7 +1908,7 @@ function UploadPage({
             [FileText, "文本 / Markdown", "直接读取内容并交给 AI 识别"],
             [Layers3, "JSON 路线", "符合 Route 结构时可直接导入地图"],
             [Code2, "CSV / 表格文本", "可根据课程清单生成路线"],
-            [FileText, "PDF / Excel", "抽取文档文本和工作表内容"],
+            [FileText, "PDF / XLSX", "抽取文档文本和工作表内容"],
             [GitFork, "GitHub 链接", "作为资料来源纳入路线规划"]
           ].map(([Icon, title, desc]) => (
             <div key={String(title)} className="mt-7 flex gap-4 sm:mt-10 sm:gap-5">
@@ -2169,19 +2170,47 @@ ${card.builtinRoute.description}
 function AccountSyncPanel({ routes, notify }: { routes: MaopuRoute[]; notify: (message: string) => void }) {
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [authDraft, setAuthDraft] = useState({ name: "", email: "", password: "" });
-  const supabaseReady = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [sessionEmail, setSessionEmail] = useState("");
+  const supabaseReady = hasSupabaseBrowserConfig();
   const routeCount = routes.length;
   const authTasks = [
-    { icon: KeyRound, title: "登录 / 注册", text: "接入 Supabase Auth 或 Auth.js 后启用邮箱、OAuth 和会话保持。" },
+    { icon: KeyRound, title: "登录 / 注册", text: "配置 Supabase 后启用邮箱账号、注册确认和会话保持。" },
     { icon: ShieldCheck, title: "权限保护", text: "路线、收藏和学习记录按用户隔离，公开路线再单独发布。" },
     { icon: LockKeyhole, title: "云端同步", text: "把本地路线迁移到数据库，并用短分享链接替代压缩 hash。" }
   ];
+
+  useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
+
+    let active = true;
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (active) setSessionEmail(data.session?.user.email ?? "");
+      })
+      .catch(() => {
+        if (active) setSessionEmail("");
+      });
+
+    const {
+      data: { subscription }
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (active) setSessionEmail(session?.user.email ?? "");
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   function updateAuthDraft(field: keyof typeof authDraft, value: string) {
     setAuthDraft((current) => ({ ...current, [field]: value }));
   }
 
-  function submitAuthPreview(event: FormEvent) {
+  async function submitAuthPreview(event: FormEvent) {
     event.preventDefault();
     if (!authDraft.email.trim() || !authDraft.password.trim()) {
       notify("请先填写邮箱和密码");
@@ -2195,7 +2224,60 @@ function AccountSyncPanel({ routes, notify }: { routes: MaopuRoute[]; notify: (m
       notify("密码至少 6 位");
       return;
     }
-    notify(supabaseReady ? "登录表单已就绪，下一步接 Supabase 服务端动作" : "登录表单已就绪，请先配置 Supabase 环境变量");
+
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      notify("请先配置 Supabase URL 和 publishable key");
+      return;
+    }
+
+    setAuthLoading(true);
+    const email = authDraft.email.trim();
+    const password = authDraft.password;
+    try {
+      const result =
+        authMode === "login"
+          ? await supabase.auth.signInWithPassword({ email, password })
+          : await supabase.auth.signUp({
+              email,
+              password,
+              options: { data: { name: authDraft.name.trim() } }
+            });
+
+      if (result.error) {
+        notify(result.error.message);
+        return;
+      }
+
+      setSessionEmail(result.data.session?.user.email ?? result.data.user?.email ?? "");
+      notify(authMode === "login" ? "已登录账号" : result.data.session ? "账号已创建并登录" : "账号已创建，请检查邮箱确认");
+    } catch {
+      notify("账号服务暂时不可用，请稍后再试");
+    } finally {
+      setAuthLoading(false);
+    }
+  }
+
+  async function signOut() {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
+
+    try {
+      setAuthLoading(true);
+      const { error } = await supabase.auth.signOut();
+
+      if (error) {
+        notify(error.message);
+        return;
+      }
+
+      setSessionEmail("");
+      notify("已退出登录");
+    } catch {
+      notify("退出登录失败，请稍后再试");
+    } finally {
+      setAuthLoading(false);
+    }
   }
 
   function exportMigrationPack() {
@@ -2234,16 +2316,32 @@ function AccountSyncPanel({ routes, notify }: { routes: MaopuRoute[]; notify: (m
     <section className="rounded-3xl border border-brand-100 bg-white p-6 shadow-soft sm:p-9">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-black text-brand-500">账号体系预留</p>
+          <p className="text-sm font-black text-brand-500">账号体系</p>
           <h2 className="mt-2 text-3xl font-black">登录后同步学习地图</h2>
         </div>
         <span className={`rounded-full px-3 py-2 text-sm font-black ${supabaseReady ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
-          {supabaseReady ? "环境已配置" : "待接入"}
+          {supabaseReady ? "Auth 已就绪" : "待配置"}
         </span>
       </div>
       <p className="mt-4 leading-7 text-muted">
-        当前有 {routeCount} 条路线在本地浏览器里。下一步接入开源认证模块后，可以迁移到云端，支持换设备继续学习。
+        当前有 {routeCount} 条路线在本地浏览器里。配置 Supabase 后可以登录账号；路线云端迁移包也已经可以导出，方便下一步接数据库。
       </p>
+      {sessionEmail && (
+        <div className="mt-5 flex flex-col gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-black text-emerald-700">当前账号</p>
+            <p className="mt-1 break-all font-bold text-emerald-900">{sessionEmail}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void signOut()}
+            disabled={authLoading}
+            className="rounded-xl border border-emerald-200 bg-white px-4 py-2 font-black text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            退出登录
+          </button>
+        </div>
+      )}
       <form onSubmit={submitAuthPreview} className="mt-6 rounded-2xl border border-line bg-brand-50/30 p-4">
         <div className="grid grid-cols-2 gap-2 rounded-xl bg-white p-1">
           {[
@@ -2291,12 +2389,16 @@ function AccountSyncPanel({ routes, notify }: { routes: MaopuRoute[]; notify: (m
             placeholder="至少 6 位"
           />
         </label>
-        <button type="submit" className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-brand-500 px-5 py-3 font-black text-white transition hover:bg-brand-600">
+        <button
+          type="submit"
+          disabled={authLoading}
+          className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-brand-500 px-5 py-3 font-black text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
+        >
           <KeyRound className="h-5 w-5" />
-          {authMode === "login" ? "登录并同步" : "创建账号"}
+          {authLoading ? "处理中..." : authMode === "login" ? "登录并同步" : "创建账号"}
         </button>
         <p className="mt-3 text-sm font-semibold leading-6 text-muted">
-          这是 Supabase/Auth.js 接入前的前端表单，不会保存密码；配置服务端动作后即可替换提交逻辑。
+          配置 Supabase 后会直接调用 Supabase Auth；未配置时只做表单校验和配置提醒。
         </p>
       </form>
       <div className="mt-6 grid gap-3">
@@ -2335,7 +2437,7 @@ function AccountSyncPanel({ routes, notify }: { routes: MaopuRoute[]; notify: (m
 }
 
 function ProductReadinessPanel({ routes, publishedCount, shareCount }: { routes: MaopuRoute[]; publishedCount: number; shareCount: number }) {
-  const supabaseReady = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY);
+  const supabaseReady = hasSupabaseBrowserConfig();
   const averageHealth = routes.length
     ? Math.round(routes.reduce((total, item) => total + analyzeRouteHealth(item).score, 0) / routes.length)
     : 0;
