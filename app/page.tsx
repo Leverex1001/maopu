@@ -118,10 +118,17 @@ type RouteHealth = {
   items: RouteHealthItem[];
 };
 
+type ShareRecord = {
+  id: string;
+  title: string;
+  sharedAt: string;
+};
+
 const STORAGE_KEY = "maopu.savedRoutes.v1";
 const FAVORITES_KEY = "maopu.favoriteCommunityRoutes.v1";
 const MASCOT_STYLE_KEY = "maopu.mascotStyle.v1";
 const PUBLISHED_ROUTES_KEY = "maopu.publishedRoutes.v1";
+const SHARE_HISTORY_KEY = "maopu.shareHistory.v1";
 
 const routeCards: CommunityRouteCard[] = [
   {
@@ -335,6 +342,17 @@ function safePublishedRoutes(): MaopuRoute[] {
     return saved ? (JSON.parse(saved) as MaopuRoute[]) : [];
   } catch {
     window.localStorage.removeItem(PUBLISHED_ROUTES_KEY);
+    return [];
+  }
+}
+
+function safeShareHistory(): ShareRecord[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const saved = window.localStorage.getItem(SHARE_HISTORY_KEY);
+    return saved ? (JSON.parse(saved) as ShareRecord[]) : [];
+  } catch {
+    window.localStorage.removeItem(SHARE_HISTORY_KEY);
     return [];
   }
 }
@@ -2316,7 +2334,7 @@ function AccountSyncPanel({ routes, notify }: { routes: MaopuRoute[]; notify: (m
   );
 }
 
-function ProductReadinessPanel({ routes, publishedCount }: { routes: MaopuRoute[]; publishedCount: number }) {
+function ProductReadinessPanel({ routes, publishedCount, shareCount }: { routes: MaopuRoute[]; publishedCount: number; shareCount: number }) {
   const supabaseReady = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY);
   const averageHealth = routes.length
     ? Math.round(routes.reduce((total, item) => total + analyzeRouteHealth(item).score, 0) / routes.length)
@@ -2333,6 +2351,12 @@ function ProductReadinessPanel({ routes, publishedCount }: { routes: MaopuRoute[
       value: `${publishedCount} 条`,
       ready: publishedCount > 0,
       detail: publishedCount > 0 ? "社区草稿已开始沉淀" : "可从社区页发布当前路线"
+    },
+    {
+      label: "分享记录",
+      value: `${shareCount} 条`,
+      ready: shareCount > 0,
+      detail: shareCount > 0 ? "已有路线被分享过" : "分享后会记录到本地历史"
     },
     {
       label: "Supabase",
@@ -2397,11 +2421,13 @@ function UniversePage({
 }) {
   const [savedRoutes, setSavedRoutes] = useState<MaopuRoute[]>([]);
   const [publishedCount, setPublishedCount] = useState(0);
+  const [shareCount, setShareCount] = useState(0);
   const [pendingDeleteRouteId, setPendingDeleteRouteId] = useState("");
 
   useEffect(() => {
     setSavedRoutes(safeSavedRoutes());
     setPublishedCount(safePublishedRoutes().length);
+    setShareCount(safeShareHistory().length);
   }, []);
 
   const routes = savedRoutes.length ? savedRoutes : currentRoute.nodes.length ? [currentRoute] : [];
@@ -2483,7 +2509,7 @@ function UniversePage({
           </button>
         </div>
         <div className="grid gap-6">
-          <ProductReadinessPanel routes={routes} publishedCount={publishedCount} />
+          <ProductReadinessPanel routes={routes} publishedCount={publishedCount} shareCount={shareCount} />
           <AccountSyncPanel routes={routes} notify={notify} />
           <div className="rounded-3xl border border-line bg-white p-6 shadow-soft sm:p-9">
             <h2 className="text-3xl font-black">学习概览</h2>
@@ -2721,6 +2747,13 @@ export default function HomePage() {
 
     const hash = `route=${encodeRouteForShare(route)}`;
     const url = `${window.location.origin}${window.location.pathname}#${hash}`;
+    const shareRecord: ShareRecord = {
+      id: routeStorageId(route),
+      title: route.title,
+      sharedAt: new Date().toISOString()
+    };
+    const nextShareHistory = [shareRecord, ...safeShareHistory().filter((item) => item.id !== shareRecord.id)].slice(0, 20);
+    window.localStorage.setItem(SHARE_HISTORY_KEY, JSON.stringify(nextShareHistory));
     try {
       await navigator.clipboard.writeText(url);
       notify("分享链接已复制");
