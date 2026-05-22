@@ -936,7 +936,7 @@ function CoursePanel({
           animate={{ x: 0, opacity: 1 }}
           exit={{ x: 420, opacity: 0 }}
           transition={{ type: "spring", damping: 28, stiffness: 240 }}
-          className="absolute bottom-5 right-5 top-5 z-20 flex w-[420px] flex-col rounded-3xl border border-line bg-white shadow-panel"
+          className="absolute bottom-5 right-5 top-5 z-20 flex w-[min(420px,calc(100%-40px))] flex-col rounded-3xl border border-line bg-white shadow-panel"
         >
           <div className="flex items-start justify-between border-b border-line p-7">
             <div>
@@ -1147,7 +1147,7 @@ function Assistant({
     <>
       <button
         onClick={() => setOpen(true)}
-        className="fixed bottom-6 right-6 z-40 flex items-center gap-3 rounded-2xl border border-brand-100 bg-white p-3 pr-5 shadow-panel transition hover:-translate-y-1"
+        className="fixed bottom-6 right-6 z-40 flex max-w-[calc(100vw-3rem)] items-center gap-3 rounded-2xl border border-brand-100 bg-white p-3 pr-5 shadow-panel transition hover:-translate-y-1"
       >
         <MascotAvatar variant={mascotVariant} className="h-16 w-16" />
         <span className="text-left">
@@ -1161,7 +1161,7 @@ function Assistant({
             initial={{ opacity: 0, y: 24, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 24, scale: 0.96 }}
-            className="fixed bottom-28 right-6 z-50 w-[390px] rounded-3xl border border-line bg-white p-6 shadow-panel"
+            className="fixed bottom-28 right-6 z-50 w-[calc(100vw-3rem)] max-w-[390px] rounded-3xl border border-line bg-white p-6 shadow-panel"
           >
             <div className="mb-6 flex items-center justify-between">
               <div className="flex items-center gap-4">
