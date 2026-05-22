@@ -18,6 +18,7 @@ import {
   useReactFlow
 } from "@xyflow/react";
 import {
+  AlertTriangle,
   BookOpen,
   Boxes,
   Check,
@@ -95,6 +96,20 @@ type MapSidebarItem = {
   label: string;
   active?: boolean;
   onClick: () => void;
+};
+
+type RouteHealthItem = {
+  id: string;
+  label: string;
+  detail: string;
+  tone: "ok" | "warn" | "danger";
+};
+
+type RouteHealth = {
+  score: number;
+  summary: string;
+  nextAction: string;
+  items: RouteHealthItem[];
 };
 
 const STORAGE_KEY = "maopu.savedRoutes.v1";
@@ -195,6 +210,76 @@ function calculateProgress(route: MaopuRoute) {
   const learned = route.nodes.filter((node) => node.status === "learned").length;
   const learning = route.nodes.filter((node) => node.status === "learning").length;
   return Math.round(((learned + learning * 0.5) / route.nodes.length) * 100);
+}
+
+function analyzeRouteHealth(route: MaopuRoute): RouteHealth {
+  const nodeIds = new Set(route.nodes.map((node) => node.id));
+  const validEdges = route.edges.filter((edge) => nodeIds.has(edge.source) && nodeIds.has(edge.target));
+  const brokenEdges = route.edges.length - validEdges.length;
+  const titleCounts = new Map<string, number>();
+  route.nodes.forEach((node) => {
+    const key = node.title.trim().toLowerCase();
+    if (key) titleCounts.set(key, (titleCounts.get(key) ?? 0) + 1);
+  });
+  const duplicateTitles = [...titleCounts.values()].filter((count) => count > 1).length;
+  const connectedNodeIds = new Set(validEdges.flatMap((edge) => [edge.source, edge.target]));
+  const isolatedNodes = route.nodes.length > 1 ? route.nodes.filter((node) => !connectedNodeIds.has(node.id)).length : 0;
+  const missingResources = route.nodes.filter((node) => node.resources.length === 0).length;
+  const missingProjects = route.nodes.filter((node) => node.projects.length === 0).length;
+  const coreCount = route.nodes.filter((node) => node.core).length;
+  const hasEnoughEdges = route.nodes.length <= 1 || validEdges.length >= route.nodes.length - 1;
+
+  let score = 100;
+  if (route.nodes.length === 0) score -= 45;
+  if (!hasEnoughEdges) score -= 18;
+  if (coreCount === 0 && route.nodes.length > 0) score -= 10;
+  score -= Math.min(24, brokenEdges * 12);
+  score -= Math.min(20, duplicateTitles * 10);
+  score -= Math.min(24, isolatedNodes * 6);
+  score -= Math.min(16, missingResources * 3);
+  score -= Math.min(12, missingProjects * 2);
+  score = Math.max(0, Math.min(100, score));
+
+  const issues: RouteHealthItem[] = [];
+  if (route.nodes.length === 0) {
+    issues.push({ id: "empty", label: "还没有节点", detail: "先添加第一个知识点或回到首页生成路线。", tone: "danger" });
+  }
+  if (brokenEdges > 0) {
+    issues.push({ id: "broken-edges", label: `${brokenEdges} 条依赖失效`, detail: "有边指向了不存在的节点，导入或删除后需要清理。", tone: "danger" });
+  }
+  if (duplicateTitles > 0) {
+    issues.push({ id: "duplicates", label: `${duplicateTitles} 组重复节点`, detail: "合并同名知识点，避免学习路线出现绕路。", tone: "warn" });
+  }
+  if (isolatedNodes > 0) {
+    issues.push({ id: "isolated", label: `${isolatedNodes} 个孤立节点`, detail: "给它们补上前置或后续依赖，地图会更可执行。", tone: "warn" });
+  }
+  if (!hasEnoughEdges && route.nodes.length > 1) {
+    issues.push({ id: "edge-coverage", label: "依赖关系偏少", detail: "至少补齐主线顺序，用户才知道先学什么。", tone: "warn" });
+  }
+  if (coreCount === 0 && route.nodes.length > 0) {
+    issues.push({ id: "core", label: "缺少核心节点", detail: "标记 2-4 个核心知识点，帮助用户抓主线。", tone: "warn" });
+  }
+  if (missingResources > 0) {
+    issues.push({ id: "resources", label: `${missingResources} 个节点缺资源`, detail: "给关键节点补官方文档、课程或练习链接。", tone: "warn" });
+  }
+  if (missingProjects > 0) {
+    issues.push({ id: "projects", label: `${missingProjects} 个节点缺项目`, detail: "每段学习都需要一个能验证理解的小作品。", tone: "warn" });
+  }
+
+  const healthyItems: RouteHealthItem[] = [
+    { id: "nodes", label: `${route.nodes.length} 个知识节点`, detail: route.nodes.length ? "路线已有可学习的结构。" : "等待生成或手动添加。", tone: route.nodes.length ? "ok" : "warn" },
+    { id: "valid-edges", label: `${validEdges.length} 条有效依赖`, detail: hasEnoughEdges ? "主线依赖覆盖较完整。" : "依赖数量还不够支撑路线顺序。", tone: hasEnoughEdges ? "ok" : "warn" },
+    { id: "core-count", label: `${coreCount} 个核心节点`, detail: coreCount ? "已经能看出路线重点。" : "还需要标记核心知识点。", tone: coreCount ? "ok" : "warn" }
+  ];
+
+  const summary = score >= 85 ? "结构很稳，可以直接学习或分享。" : score >= 65 ? "路线可用，但还值得补几处结构。" : "路线还比较松，需要先整理主线。";
+
+  return {
+    score,
+    summary,
+    nextAction: issues[0]?.detail ?? "可以继续点亮节点，或导出 Markdown 做学习计划。",
+    items: [...issues, ...healthyItems].slice(0, 4)
+  };
 }
 
 function safeSavedRoutes(): MaopuRoute[] {
@@ -440,7 +525,7 @@ function routeFilename(route: MaopuRoute, extension: string) {
 
 function Logo() {
   return (
-    <div className="flex items-center gap-3 font-black text-3xl">
+    <div className="flex shrink-0 items-center gap-3 whitespace-nowrap font-black text-3xl">
       <div className="grid h-11 w-11 place-items-center rounded-full border border-brand-100 bg-gradient-to-br from-white to-brand-100 text-xl text-brand-500 shadow-soft">
         猫
       </div>
@@ -452,7 +537,7 @@ function Logo() {
 function PrimaryButton({ children, className = "", ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button
-      className={`rounded-xl bg-gradient-to-r from-brand-500 to-violet-500 px-7 py-4 font-bold text-white shadow-soft transition hover:-translate-y-0.5 hover:shadow-panel ${className}`}
+      className={`shrink-0 whitespace-nowrap rounded-xl bg-gradient-to-r from-brand-500 to-violet-500 px-7 py-4 font-bold text-white shadow-soft transition hover:-translate-y-0.5 hover:shadow-panel disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:shadow-soft ${className}`}
       {...props}
     >
       {children}
@@ -463,7 +548,7 @@ function PrimaryButton({ children, className = "", ...props }: React.ButtonHTMLA
 function OutlineButton({ children, className = "", ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button
-      className={`rounded-xl border border-brand-500 bg-white px-6 py-3 font-bold text-brand-500 transition hover:bg-brand-50 ${className}`}
+      className={`shrink-0 whitespace-nowrap rounded-xl border border-brand-500 bg-white px-6 py-3 font-bold text-brand-500 transition hover:bg-brand-50 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white ${className}`}
       {...props}
     >
       {children}
@@ -1275,6 +1360,7 @@ function MapPage({
   const learned = route.nodes.filter((node) => node.status === "learned").length;
   const learning = route.nodes.filter((node) => node.status === "learning").length;
   const progress = calculateProgress(route);
+  const health = useMemo(() => analyzeRouteHealth(route), [route]);
   const [search, setSearch] = useState("");
   const [exportOpen, setExportOpen] = useState(false);
   const [searchMiss, setSearchMiss] = useState("");
@@ -1285,11 +1371,12 @@ function MapPage({
   ];
   const sidebarItems: MapSidebarItem[] = [
     { icon: MapIcon, label: "地图", active: true, onClick: () => setView("map") },
+    { icon: Plus, label: "节点", onClick: onAddNode },
     { icon: CheckCircle2, label: "保存", onClick: onSave },
     { icon: Share2, label: "分享", onClick: onShare },
     { icon: Download, label: "导出", onClick: () => setExportOpen((value) => !value) },
     { icon: UploadCloud, label: "导入", onClick: () => setView("upload") },
-    { icon: Plus, label: "新建", onClick: onNewRoute },
+    { icon: Boxes, label: "新线", onClick: onNewRoute },
     { icon: CircleUserRound, label: "我的", onClick: () => setView("universe") }
   ];
 
@@ -1310,13 +1397,13 @@ function MapPage({
       <header className="flex h-20 items-center justify-between border-b border-line px-7">
         <div className="flex items-center gap-7">
           <Logo />
-          <div className="hidden items-center gap-2 rounded-xl border border-line bg-white px-4 py-3 font-bold text-muted lg:flex">
+          <div className="hidden items-center gap-2 whitespace-nowrap rounded-xl border border-line bg-white px-4 py-3 font-bold text-muted 2xl:flex">
             <Search className="h-5 w-5 text-brand-500" />
             我的路线 <ChevronRight className="h-4 w-4" /> {route.title}
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <div className="hidden items-center gap-2 rounded-xl border border-line bg-white px-4 py-3 font-bold text-muted lg:flex">
+          <div className="hidden items-center gap-2 rounded-xl border border-line bg-white px-4 py-3 font-bold text-muted 2xl:flex">
             <Search className="h-5 w-5" />
             <input
               value={search}
@@ -1328,23 +1415,23 @@ function MapPage({
               className="w-32 bg-transparent outline-none"
             />
           </div>
-          {searchMiss && <span className="hidden rounded-xl bg-rose-50 px-3 py-2 text-sm font-bold text-rose-600 lg:inline">{searchMiss}</span>}
-          <OutlineButton onClick={onSave} className="hidden items-center gap-2 lg:flex">
+          {searchMiss && <span className="hidden rounded-xl bg-rose-50 px-3 py-2 text-sm font-bold text-rose-600 2xl:inline">{searchMiss}</span>}
+          <OutlineButton onClick={onSave} className="hidden items-center gap-2 2xl:flex">
             <CheckCircle2 className="h-5 w-5" />
             保存
           </OutlineButton>
-          <OutlineButton onClick={onAddNode} className="hidden items-center gap-2 lg:flex">
+          <OutlineButton onClick={onAddNode} className="hidden items-center gap-2 2xl:flex">
             <Plus className="h-5 w-5" />
             节点
           </OutlineButton>
-          <OutlineButton onClick={() => setView("upload")} className="hidden lg:block">
+          <OutlineButton onClick={() => setView("upload")} className="hidden 2xl:block">
             导入路线
           </OutlineButton>
-          <OutlineButton onClick={onShare} className="hidden items-center gap-2 lg:flex">
+          <OutlineButton onClick={onShare} className="hidden items-center gap-2 2xl:flex">
             <Share2 className="h-5 w-5" />
             分享
           </OutlineButton>
-          <div className="relative hidden lg:block">
+          <div className="relative hidden 2xl:block">
             <OutlineButton onClick={() => setExportOpen((value) => !value)} className="flex items-center gap-2">
               <Download className="h-5 w-5" />
               导出
@@ -1372,13 +1459,14 @@ function MapPage({
         </div>
       </header>
 
-      <div className="grid h-[calc(100vh-80px)] grid-cols-[96px_1fr]">
-        <aside className="flex flex-col items-center gap-4 border-r border-line bg-white px-3 py-6">
+      <div className="grid h-[calc(100vh-80px)] grid-cols-[76px_1fr] sm:grid-cols-[96px_1fr]">
+        <aside className="flex min-h-0 flex-col items-center gap-2 overflow-y-auto border-r border-line bg-white px-2 py-3 sm:gap-4 sm:px-3 sm:py-6">
           {sidebarItems.map((item) => (
             <button
               key={item.label}
               onClick={item.onClick}
-              className={`flex w-full flex-col items-center gap-2 rounded-2xl py-4 text-sm font-black ${
+              aria-label={item.label}
+              className={`flex w-full flex-col items-center gap-1.5 rounded-2xl py-3 text-xs font-black sm:gap-2 sm:py-4 sm:text-sm ${
                 item.active ? "bg-brand-50 text-brand-500" : "text-muted hover:bg-brand-50"
               }`}
             >
@@ -1390,7 +1478,7 @@ function MapPage({
 
         <section className="relative">
           {exportOpen && (
-            <div className="absolute left-6 top-6 z-30 w-44 rounded-2xl border border-line bg-white p-2 shadow-panel lg:hidden">
+            <div className="absolute left-6 top-6 z-30 w-44 rounded-2xl border border-line bg-white p-2 shadow-panel 2xl:hidden">
               {exportOptions.map(({ kind, label }) => (
                 <button
                   key={kind}
@@ -1405,10 +1493,10 @@ function MapPage({
               ))}
             </div>
           )}
-          <div className="absolute left-6 top-6 z-10 rounded-3xl border border-line bg-white/92 p-5 shadow-soft backdrop-blur">
-            <h1 className="text-3xl font-black">{route.title}</h1>
+          <div className="absolute left-4 top-4 z-10 max-h-[calc(100vh-128px)] w-[min(620px,calc(100%-32px))] overflow-y-auto rounded-3xl border border-line bg-white/92 p-4 shadow-soft backdrop-blur sm:left-6 sm:top-6 sm:w-[min(620px,calc(100%-48px))] sm:p-5">
+            <h1 className="text-2xl font-black sm:text-3xl">{route.title}</h1>
             <p className="mt-2 max-w-xl text-sm leading-6 text-muted">{route.description}</p>
-            <div className="mt-4 flex gap-3 text-sm font-bold">
+            <div className="mt-4 flex flex-wrap gap-3 text-sm font-bold">
               <span className="rounded-full bg-emerald-50 px-3 py-2 text-emerald-700">{learned} 已点亮</span>
               <span className="rounded-full bg-amber-50 px-3 py-2 text-amber-700">{learning} 学习中</span>
               <span className="rounded-full bg-brand-50 px-3 py-2 text-brand-500">{route.nodes.length} 节点</span>
@@ -1421,6 +1509,43 @@ function MapPage({
               <div className="h-2 overflow-hidden rounded-full bg-brand-50">
                 <div className="h-full rounded-full bg-gradient-to-r from-brand-500 to-violet-500" style={{ width: `${progress}%` }} />
               </div>
+            </div>
+            <div className="mt-4 rounded-2xl border border-line bg-white/80 p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-black text-muted">路线体检</p>
+                  <p className="mt-1 text-sm font-bold text-muted">{health.summary}</p>
+                </div>
+                <strong
+                  className={`rounded-xl px-3 py-2 text-lg ${
+                    health.score >= 85
+                      ? "bg-emerald-50 text-emerald-700"
+                      : health.score >= 65
+                        ? "bg-amber-50 text-amber-700"
+                        : "bg-rose-50 text-rose-700"
+                  }`}
+                >
+                  {health.score}
+                </strong>
+              </div>
+              <div className="mt-3 grid gap-2">
+                {health.items.map((item) => (
+                  <div key={item.id} className="flex items-start gap-2 text-sm font-bold text-muted">
+                    {item.tone === "ok" ? (
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                    ) : (
+                      <AlertTriangle className={`mt-0.5 h-4 w-4 shrink-0 ${item.tone === "danger" ? "text-rose-600" : "text-amber-600"}`} />
+                    )}
+                    <span>
+                      <span className="text-ink">{item.label}</span>
+                      <span className="ml-1 font-semibold">{item.detail}</span>
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-3 rounded-xl bg-brand-50 px-3 py-2 text-sm font-bold leading-6 text-brand-500">
+                下一步：{health.nextAction}
+              </p>
             </div>
           </div>
           {route.nodes.length === 0 && (
@@ -1468,6 +1593,7 @@ function UploadPage({
   const [parseSummary, setParseSummary] = useState("");
   const [parsing, setParsing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const hasMaterial = Boolean(sourceText.trim() || githubUrl.trim());
 
   async function handleFile(file: File) {
     setParsing(true);
@@ -1610,11 +1736,12 @@ function UploadPage({
               <GitFork className="h-5 w-5" />
               解析链接
             </OutlineButton>
-            <PrimaryButton onClick={submitMaterial} className="flex items-center justify-center gap-2">
+            <PrimaryButton disabled={parsing || !hasMaterial} onClick={submitMaterial} className="flex items-center justify-center gap-2">
               <Sparkles className="h-5 w-5" />
               识别资料并生成路线
             </PrimaryButton>
             <OutlineButton
+              disabled={parsing || !hasMaterial}
               onClick={() => {
                 setSourceText("");
                 setGithubUrl("");
@@ -1766,13 +1893,18 @@ ${card.builtinRoute.description}
                   <OutlineButton onClick={() => onGenerate(card.prompt)}>生成这条路线</OutlineButton>
                 )}
                 <div className="flex justify-between text-muted">
-                  <button onClick={() => toggleFavorite(card.title)} title="收藏路线" className={favorites.includes(card.title) ? "text-rose-500" : "hover:text-rose-500"}>
+                  <button
+                    onClick={() => toggleFavorite(card.title)}
+                    title="收藏路线"
+                    aria-label={`${favorites.includes(card.title) ? "取消收藏" : "收藏"}${card.title}`}
+                    className={favorites.includes(card.title) ? "text-rose-500" : "hover:text-rose-500"}
+                  >
                     <Heart className="h-6 w-6" />
                   </button>
-                  <button onClick={() => forkRoute(card)} title="Fork 路线" className="hover:text-brand-500">
+                  <button onClick={() => forkRoute(card)} title="Fork 路线" aria-label={`Fork ${card.title}`} className="hover:text-brand-500">
                     <GitFork className="h-6 w-6" />
                   </button>
-                  <button onClick={() => void shareRoute(card)} title="复制分享" className="hover:text-brand-500">
+                  <button onClick={() => void shareRoute(card)} title="复制分享" aria-label={`复制分享 ${card.title}`} className="hover:text-brand-500">
                     <Share2 className="h-6 w-6" />
                   </button>
                 </div>
@@ -1845,7 +1977,7 @@ function UniversePage({
               const color = progress >= 100 ? "bg-emerald-100 text-emerald-600" : progress > 0 ? "bg-amber-100 text-amber-600" : "bg-brand-50 text-brand-500";
               return (
                 <div key={`${item.title}-${index}`} className="flex items-center gap-5 border-b border-line py-8">
-                  <button onClick={() => onOpenRoute(item)} className={`grid h-16 w-16 place-items-center rounded-2xl ${color}`}>
+                  <button onClick={() => onOpenRoute(item)} className={`grid h-16 w-16 place-items-center rounded-2xl ${color}`} aria-label={`打开路线 ${item.title}`}>
                     <Boxes className="h-8 w-8" />
                   </button>
                   <button onClick={() => onOpenRoute(item)} className="min-w-0 flex-1 text-left">
@@ -1853,10 +1985,10 @@ function UniversePage({
                     <p className="mt-2 text-lg text-muted">{status} · {item.nodes.length} 节点</p>
                   </button>
                   <span className="font-bold text-brand-500">{progress}%</span>
-                  <button onClick={() => deleteSavedRoute(item)} className="rounded-xl border border-line p-2 text-muted hover:text-rose-500" title="删除路线">
+                  <button onClick={() => deleteSavedRoute(item)} className="rounded-xl border border-line p-2 text-muted hover:text-rose-500" title="删除路线" aria-label={`删除路线 ${item.title}`}>
                     <Trash2 className="h-5 w-5" />
                   </button>
-                  <button onClick={() => onOpenRoute(item)} className="rounded-xl border border-line p-2 text-muted hover:text-brand-500" title="打开路线">
+                  <button onClick={() => onOpenRoute(item)} className="rounded-xl border border-line p-2 text-muted hover:text-brand-500" title="打开路线" aria-label={`打开路线 ${item.title}`}>
                     <ChevronRight className="h-5 w-5" />
                   </button>
                 </div>
