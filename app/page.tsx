@@ -1646,7 +1646,12 @@ function CommunityPage({
   }
 
   async function shareRoute(card: CommunityRouteCard) {
-    const text = `${card.title} - ${card.prompt}`;
+    const text = card.builtinRoute
+      ? `${card.title}
+${card.builtinRoute.description}
+节点数：${card.builtinRoute.nodes.length}
+摘要：${card.builtinRoute.summary}`
+      : `${card.title} - ${card.prompt}`;
     try {
       await navigator.clipboard.writeText(text);
       notify("路线信息已复制，可发给别人");
