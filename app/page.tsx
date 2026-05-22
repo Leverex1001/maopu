@@ -1930,8 +1930,12 @@ export default function HomePage() {
     const routes = safeSavedRoutes();
     const nextId = routeStorageId(nextRoute);
     const withoutCurrent = routes.filter((item) => routeStorageId(item) !== nextId && item.title !== nextRoute.title);
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify([nextRoute, ...withoutCurrent].slice(0, 12)));
-    if (!options.silent) notify("路线已保存到本地");
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify([nextRoute, ...withoutCurrent].slice(0, 12)));
+      if (!options.silent) notify("路线已保存到本地");
+    } catch {
+      if (!options.silent) notify("本地存储空间不足，路线暂未保存");
+    }
   }
 
   function importRoute(nextRoute: MaopuRoute) {
