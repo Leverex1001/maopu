@@ -37,13 +37,11 @@ import {
   Library,
   Map as MapIcon,
   MessageCircle,
-  Network,
   PanelRightOpen,
   Pencil,
   Plus,
   Search,
   Send,
-  Settings,
   Share2,
   Sparkles,
   Trash2,
@@ -90,6 +88,13 @@ type CommunityRouteCard = {
   categories: string[];
   prompt: string;
   builtinRoute?: MaopuRoute;
+};
+
+type MapSidebarItem = {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  active?: boolean;
+  onClick: () => void;
 };
 
 const STORAGE_KEY = "maopu.savedRoutes.v1";
@@ -648,8 +653,8 @@ function LandingPage({
       <header className="mx-auto flex max-w-[1440px] items-center justify-between">
         <Logo />
         <nav className="hidden items-center gap-9 text-lg font-bold lg:flex">
-          <button onClick={() => setView("community")} className="hover:text-brand-500">
-            探索路线
+          <button onClick={() => setView("upload")} className="hover:text-brand-500">
+            上传资料
           </button>
           <button onClick={() => setView("community")} className="hover:text-brand-500">
             社区
@@ -924,8 +929,20 @@ function CoursePanel({
 
   function saveDraft() {
     if (!draft) return;
-    onUpdate(draft);
+    const title = draft.title.trim();
+    if (!title) return;
+    onUpdate({ ...draft, title });
     setEditing(false);
+  }
+
+  function toggleEditing() {
+    if (editing) {
+      setDraft(node);
+      setEditing(false);
+      return;
+    }
+
+    setEditing(true);
   }
 
   return (
@@ -945,9 +962,9 @@ function CoursePanel({
             </div>
             <div className="flex gap-2">
               <button
-                onClick={() => setEditing((value) => !value)}
+                onClick={toggleEditing}
                 className="rounded-xl border border-line p-3 text-muted hover:text-brand-500"
-                title="编辑节点"
+                title={editing ? "取消编辑" : "编辑节点"}
               >
                 <Pencil className="h-5 w-5" />
               </button>
@@ -1013,7 +1030,7 @@ function CoursePanel({
                 <EditorTextarea title="推荐项目（一行一个）" value={linesToText(draft.projects)} onChange={(value) => updateDraft({ projects: textToLines(value) })} />
                 <EditorTextarea title="推荐资源（一行一个）" value={linesToText(draft.resources)} onChange={(value) => updateDraft({ resources: textToLines(value) })} />
                 <div className="grid grid-cols-2 gap-3 pt-2">
-                  <PrimaryButton onClick={saveDraft} className="py-3">
+                  <PrimaryButton disabled={!draft.title.trim()} onClick={saveDraft} className="py-3 disabled:cursor-not-allowed disabled:opacity-50">
                     保存节点
                   </PrimaryButton>
                   <OutlineButton onClick={() => setDraft(node)} className="py-3">
@@ -1261,6 +1278,14 @@ function MapPage({
   const [search, setSearch] = useState("");
   const [exportOpen, setExportOpen] = useState(false);
   const [searchMiss, setSearchMiss] = useState("");
+  const sidebarItems: MapSidebarItem[] = [
+    { icon: MapIcon, label: "地图", active: true, onClick: () => setView("map") },
+    { icon: CheckCircle2, label: "保存", onClick: onSave },
+    { icon: Share2, label: "分享", onClick: onShare },
+    { icon: UploadCloud, label: "导入", onClick: () => setView("upload") },
+    { icon: Plus, label: "新建", onClick: onNewRoute },
+    { icon: CircleUserRound, label: "我的", onClick: () => setView("universe") }
+  ];
 
   function findNode() {
     const keyword = search.trim().toLowerCase();
@@ -1347,16 +1372,10 @@ function MapPage({
 
       <div className="grid h-[calc(100vh-80px)] grid-cols-[96px_1fr]">
         <aside className="flex flex-col items-center gap-4 border-r border-line bg-white px-3 py-6">
-          {[
-            { icon: MapIcon, label: "地图", view: "map" as View, active: true },
-            { icon: Network, label: "路线", view: "community" as View },
-            { icon: UploadCloud, label: "导入", view: "upload" as View },
-            { icon: CircleUserRound, label: "我的", view: "universe" as View },
-            { icon: Settings, label: "新建", view: "map" as View }
-          ].map((item) => (
+          {sidebarItems.map((item) => (
             <button
               key={item.label}
-              onClick={() => (item.label === "新建" ? onNewRoute() : setView(item.view))}
+              onClick={item.onClick}
               className={`flex w-full flex-col items-center gap-2 rounded-2xl py-4 text-sm font-black ${
                 item.active ? "bg-brand-50 text-brand-500" : "text-muted hover:bg-brand-50"
               }`}
@@ -1646,6 +1665,22 @@ function CommunityPage({
     });
   }
 
+  function forkRoute(card: CommunityRouteCard) {
+    if (card.builtinRoute) {
+      onLoadBuiltin({
+        ...card.builtinRoute,
+        title: `${card.builtinRoute.title}（我的 Fork）`,
+        summary: `${card.builtinRoute.summary} 已复制为可编辑路线。`,
+        nodes: card.builtinRoute.nodes.map((node) => ({ ...node })),
+        edges: card.builtinRoute.edges.map((edge) => ({ ...edge }))
+      });
+      notify("已 Fork 精选路线");
+      return;
+    }
+
+    onGenerate(`Fork 并定制这条路线：${card.prompt}`);
+  }
+
   async function shareRoute(card: CommunityRouteCard) {
     const text = card.builtinRoute
       ? `${card.title}
@@ -1716,7 +1751,7 @@ ${card.builtinRoute.description}
                   <button onClick={() => toggleFavorite(card.title)} title="收藏路线" className={favorites.includes(card.title) ? "text-rose-500" : "hover:text-rose-500"}>
                     <Heart className="h-6 w-6" />
                   </button>
-                  <button onClick={() => card.builtinRoute ? onLoadBuiltin(card.builtinRoute) : onGenerate(`Fork 并定制这条路线：${card.prompt}`)} title="Fork 路线" className="hover:text-brand-500">
+                  <button onClick={() => forkRoute(card)} title="Fork 路线" className="hover:text-brand-500">
                     <GitFork className="h-6 w-6" />
                   </button>
                   <button onClick={() => void shareRoute(card)} title="复制分享" className="hover:text-brand-500">
