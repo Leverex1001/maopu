@@ -1426,7 +1426,7 @@ function UploadPage({
                 <UploadCloud className="h-12 w-12" />
               </span>
               <h2 className="mt-7 text-4xl font-black">选择或拖入学习资料</h2>
-              <p className="mt-4 text-xl text-muted">支持 Markdown / JSON 路线 / CSV / 文本；PDF 和 Excel 会先读取文件信息</p>
+              <p className="mt-4 text-xl text-muted">支持 Markdown / JSON 路线 / CSV / 文本 / PDF / Excel，解析后可直接生成路线</p>
               <span className="mt-8 inline-flex rounded-xl bg-gradient-to-r from-brand-500 to-violet-500 px-7 py-4 font-bold text-white shadow-soft">
                 {parsing ? "正在读取..." : fileName || "选择文件"}
               </span>
@@ -1484,6 +1484,7 @@ function UploadPage({
             [FileText, "文本 / Markdown", "直接读取内容并交给 AI 识别"],
             [Layers3, "JSON 路线", "符合 Route 结构时可直接导入地图"],
             [Code2, "CSV / 表格文本", "可根据课程清单生成路线"],
+            [FileText, "PDF / Excel", "抽取文档文本和工作表内容"],
             [GitFork, "GitHub 链接", "作为资料来源纳入路线规划"]
           ].map(([Icon, title, desc]) => (
             <div key={String(title)} className="mt-10 flex gap-5">

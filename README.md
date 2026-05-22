@@ -76,6 +76,7 @@
   - 读取文本、Markdown、CSV 等文本类资料
   - 服务端解析 PDF 文本
   - 服务端解析 Excel / xlsx 工作表
+  - 上传页文案会提示 PDF / Excel 已支持内容抽取
   - 导入符合结构的 JSON 路线
   - 粘贴资料内容或网页链接生成路线
   - GitHub 链接抓取 README 和目录结构
